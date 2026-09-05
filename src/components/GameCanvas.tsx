@@ -1134,6 +1134,30 @@ function drawTowers(ctx: CanvasRenderingContext2D, sim: SimWorld, selectedTower:
       ctx.textAlign = 'center';
       ctx.fillText(`T${maxRank}`, tower.x, tower.y - 18);
     }
+
+    // Visible Targeting Mode on the Tower UI
+    if (isSelected) {
+      const priorityLabel = tower.targetPriority === 'nearest' ? 'CLOSEST' : tower.targetPriority.toUpperCase();
+      ctx.save();
+      ctx.font = 'bold 8px Rajdhani, monospace';
+      const textWidth = ctx.measureText(priorityLabel).width;
+      const boxW = textWidth + 8;
+      const boxH = 12;
+      const boxX = tower.x - boxW / 2;
+      const boxY = tower.y + 16;
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+      ctx.fillRect(boxX, boxY, boxW, boxH);
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+      ctx.fillStyle = '#38bdf8';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(priorityLabel, tower.x, boxY + boxH / 2);
+      ctx.restore();
+    }
   }
 }
 

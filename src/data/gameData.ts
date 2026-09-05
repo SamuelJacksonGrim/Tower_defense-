@@ -18,6 +18,10 @@ export const TOWERS_DATA: Record<string, TowerDef> = {
     canTargetGround: true,
     color: '#10b981',
     accentColor: '#34d399',
+    tacticalRole: 'BURST DPS',
+    strongAgainst: ['Cinder Skitter', 'Soot Wing', 'Ash Raider'],
+    weakAgainst: ['Slag Plate', 'Dense Swarms'],
+    synergies: ['Frost Prism slow clumps targets for Sharpshot crits', 'Damage Amplification Auras'],
     paths: [
       {
         name: 'Rapidfire',
@@ -73,6 +77,10 @@ export const TOWERS_DATA: Record<string, TowerDef> = {
     splashRatio: 0.55,
     color: '#f97316',
     accentColor: '#fb923c',
+    tacticalRole: 'AOE SPLASH',
+    strongAgainst: ['Ember Mite', 'Ash Raider', 'Ash Fiend (Splitter)'],
+    weakAgainst: ['Soot Wing (Air)', 'Cinder Skitter (Speed)'],
+    synergies: ['Pair with Frost Prism to group enemies in blast radius', 'Slag fragmentation shreds armor for physical DPS'],
     paths: [
       {
         name: 'Shrapnel',
@@ -128,6 +136,10 @@ export const TOWERS_DATA: Record<string, TowerDef> = {
     slowDuration: 3.0,
     color: '#06b6d4',
     accentColor: '#67e8f9',
+    tacticalRole: 'CONTROL',
+    strongAgainst: ['Cinder Skitter', 'Ember Mite clusters', 'Ash Fiend'],
+    weakAgainst: ['Kiln Colossus (50% CC resistance)', 'Magic-immune shields'],
+    synergies: ['Shatter Vulnerability makes frozen demons take +40% physical damage', 'Delays runners inside artillery zones'],
     paths: [
       {
         name: 'Deep Freeze',
@@ -558,7 +570,14 @@ export const ENEMIES_DATA: Record<string, EnemyDef> = {
     isBoss: false,
     size: 14,
     color: '#e11d48',
-    description: 'Standard shock troops from Cold Hell. Balanced speed and endurance.'
+    description: 'Standard shock troops from Cold Hell. Balanced speed and endurance.',
+    hpRank: 4,
+    armorRank: 2,
+    speedRank: 5,
+    weaknesses: ['Rapidfire Archery', 'Frost Slow'],
+    resistances: ['Minor Physical Shield'],
+    behavior: 'Advances along standard march corridor at steady velocity',
+    firstEncountered: 'Outpost 7 Perimeter (Level 1)'
   },
   runner: {
     type: 'runner',
@@ -572,7 +591,14 @@ export const ENEMIES_DATA: Record<string, EnemyDef> = {
     isBoss: false,
     size: 11,
     color: '#f97316',
-    description: 'Extremely fast demonic scouts that sprint down lines. Weak to slows and burst fire.'
+    description: 'Extremely fast demonic scouts that sprint down lines. Weak to slows and burst fire.',
+    hpRank: 2,
+    armorRank: 1,
+    speedRank: 9,
+    weaknesses: ['Frost Control', 'Chain Lightning', 'Spike Traps'],
+    resistances: ['Evasion vs slow mortar shells'],
+    behavior: 'Prioritizes shortest route; sprints at 155 px/s down lane',
+    firstEncountered: 'The Frontier Breach (Level 2)'
   },
   swarm: {
     type: 'swarm',
@@ -586,7 +612,14 @@ export const ENEMIES_DATA: Record<string, EnemyDef> = {
     isBoss: false,
     size: 9,
     color: '#eab308',
-    description: 'Tiny insectoid horrors moving in high numbers. Vulnerable to splash artillery and chain lightning.'
+    description: 'Tiny insectoid horrors moving in high numbers. Vulnerable to splash artillery and chain lightning.',
+    hpRank: 1,
+    armorRank: 0,
+    speedRank: 6,
+    weaknesses: ['Field Cannon Splash', 'Mortar Artillery', 'Tesla Coil'],
+    resistances: ['Overwhelms single-target snipers through pure numbers'],
+    behavior: 'Clusters in dense waves to absorb single-target shots',
+    firstEncountered: 'Outpost 7 Perimeter (Level 1)'
   },
   armored: {
     type: 'armored',
@@ -600,7 +633,14 @@ export const ENEMIES_DATA: Record<string, EnemyDef> = {
     isBoss: false,
     size: 18,
     color: '#64748b',
-    description: 'Heavily encrusted with demon molten iron. Shrugs off physical arrows; highly vulnerable to Mage magic.'
+    description: 'Heavily encrusted with demon molten iron. Shrugs off physical arrows; highly vulnerable to Mage magic.',
+    hpRank: 7,
+    armorRank: 8,
+    speedRank: 3,
+    weaknesses: ['Arcane Mage Tower', 'Pyromancer Burn', 'Armor-Piercing Ballista'],
+    resistances: ['Flat -8 reduction against kinetic arrows and non-piercing shot'],
+    behavior: 'Slowly absorbs damage to shield trailing raiders',
+    firstEncountered: 'Ashen Caldera (Level 4)'
   },
   flyer: {
     type: 'flyer',
@@ -614,7 +654,14 @@ export const ENEMIES_DATA: Record<string, EnemyDef> = {
     isBoss: false,
     size: 13,
     color: '#38bdf8',
-    description: 'Winged fiends flying above ground artillery. Must be shot down with Ballistas, Archery, or Tesla.'
+    description: 'Winged fiends flying above ground artillery. Must be shot down with Ballistas, Archery, or Tesla.',
+    hpRank: 3,
+    armorRank: 2,
+    speedRank: 7,
+    weaknesses: ['Ballista Air-Sniping', 'Archer Volleys', 'Tesla Discharge'],
+    resistances: ['100% immune to ground artillery (Cannons, Mortars, Traps)'],
+    behavior: 'Flies above road corridors directly bypassing ground barricades',
+    firstEncountered: 'Sulfur Ridge (Level 3)'
   },
   splitter: {
     type: 'splitter',
@@ -628,7 +675,14 @@ export const ENEMIES_DATA: Record<string, EnemyDef> = {
     isBoss: false,
     size: 16,
     color: '#a855f7',
-    description: 'Splits into 2 Ember Mites upon death.'
+    description: 'Splits into 2 Ember Mites upon death.',
+    hpRank: 6,
+    armorRank: 4,
+    speedRank: 4,
+    weaknesses: ['Frost Slow', 'Follow-up Cannon AOE'],
+    resistances: ['Reconstitutes into 2 child mites upon fatal injury'],
+    behavior: 'Splits into two sprinting Ember Mites upon death',
+    firstEncountered: 'Obsidian Pass (Level 5)'
   },
   leech: {
     type: 'leech',
@@ -642,7 +696,14 @@ export const ENEMIES_DATA: Record<string, EnemyDef> = {
     isBoss: false,
     size: 15,
     color: '#10b981',
-    description: 'Regenerates 12 HP per second. Countered by fire and poison debuffs.'
+    description: 'Regenerates 12 HP per second. Countered by fire and poison debuffs.',
+    hpRank: 7,
+    armorRank: 4,
+    speedRank: 4,
+    weaknesses: ['Continuous Burn', 'Poison Stacks', 'High Burst Focus'],
+    resistances: ['Passive +12 HP/sec cellular regeneration unless ignited'],
+    behavior: 'Siphons ambient void energy to regenerate missing health',
+    firstEncountered: 'The Iron Crucible (Level 6)'
   },
   boss: {
     type: 'boss',
@@ -656,7 +717,14 @@ export const ENEMIES_DATA: Record<string, EnemyDef> = {
     isBoss: true,
     size: 26,
     color: '#dc2626',
-    description: 'Massive towering dread behemoth. Has CC resistance and immense health pool.'
+    description: 'Massive towering dread behemoth. Has CC resistance and immense health pool.',
+    hpRank: 10,
+    armorRank: 9,
+    speedRank: 2,
+    weaknesses: ['Obelisk Focused Beam', 'Sharpshot Crits', 'Arcane Amp Auras'],
+    resistances: ['50% CC resistance to slow/freeze', '40% reduction against %-HP'],
+    behavior: 'Relentlessly marches; leaks cause massive 5-life penalty',
+    firstEncountered: 'Demon Gate Nexus (Level 8)'
   }
 };
 

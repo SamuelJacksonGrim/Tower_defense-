@@ -8,6 +8,8 @@ import { TowerInspector } from './TowerInspector';
 import { BattleVictoryModal } from './BattleVictoryModal';
 import { BattleDefeatModal } from './BattleDefeatModal';
 import { TowerDiscoveryModal } from './TowerDiscoveryModal';
+import { WaveIntelligenceCard } from './WaveIntelligenceCard';
+import { TelemetryModal } from './TelemetryModal';
 import { sound } from '../services/soundService';
 import {
   Heart,
@@ -21,7 +23,8 @@ import {
   ArrowLeft,
   Skull,
   Radio,
-  Grid3X3
+  Grid3X3,
+  Activity
 } from 'lucide-react';
 
 interface ActiveGameScreenProps {
@@ -49,9 +52,15 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
   const [currentWave, setCurrentWave] = useState<number>(1);
   const [waveActive, setWaveActive] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
-  const [gameSpeed, setGameSpeed] = useState<number>(1.0);
+  const [gameSpeed, setGameSpeed] = useState<number>(() => {
+    const saved = localStorage.getItem('citadel_game_speed');
+    if (saved === '2' || saved === '2.0') return 2.0;
+    if (saved === '3' || saved === '3.0') return 3.0;
+    return 1.0;
+  });
   const [soundMuted, setSoundMuted] = useState<boolean>(false);
   const [autoStartWaves, setAutoStartWaves] = useState<boolean>(false);
+  const [telemetryModalOpen, setTelemetryModalOpen] = useState<boolean>(false);
 
   // Selection & Building State
   const [selectedTower, setSelectedTower] = useState<PlacedTower | null>(null);
@@ -147,6 +156,7 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
       saveState.techTree
     );
 
+    newSim.gameSpeed = gameSpeed;
     attachEvents(newSim);
     simRef.current = newSim;
     setSim(newSim);
@@ -159,6 +169,12 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
     setVictoryModalOpen(false);
     setDefeatModalOpen(false);
   }, [level, saveState, attachEvents]);
+
+  const handleSetSpeed = (speed: number) => {
+    setGameSpeed(speed);
+    localStorage.setItem('citadel_game_speed', speed.toString());
+    if (simRef.current) simRef.current.gameSpeed = speed;
+  };
 
   // Trigger re-init only if level number or map changes
   useEffect(() => {
@@ -381,29 +397,68 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
             <span>Auto</span>
           </button>
 
-          {/* Pause / Resume */}
-          <button
-            onClick={() => { sound.playClick(); setIsPaused(p => !p); }}
-            className={`p-1.5 rounded-xl border transition-colors cursor-pointer ${
-              isPaused
-                ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
-            }`}
-            title={isPaused ? 'Resume' : 'Pause'}
-          >
-            {isPaused ? <Play size={16} /> : <Pause size={16} />}
-          </button>
+          {/* Tactical Speed Controls & Pause */}
+          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-0.5">
+            {/* Pause */}
+            <button
+              onClick={() => { sound.playClick(); setIsPaused(p => !p); }}
+              className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                isPaused
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title={isPaused ? 'Resume Simulation' : 'Pause Simulation'}
+            >
+              {isPaused ? <Play size={12} className="fill-current" /> : <Pause size={12} />}
+            </button>
 
-          {/* Speed Multiplier (1x, 2x, 4x) */}
+            {/* 1x */}
+            <button
+              onClick={() => { sound.playClick(); handleSetSpeed(1.0); }}
+              className={`px-2 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                gameSpeed === 1.0 && !isPaused
+                  ? 'bg-sky-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Normal Speed (1×)"
+            >
+              ▶ 1×
+            </button>
+
+            {/* 2x */}
+            <button
+              onClick={() => { sound.playClick(); handleSetSpeed(2.0); }}
+              className={`px-2 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                gameSpeed === 2.0 && !isPaused
+                  ? 'bg-sky-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Fast Speed (2×)"
+            >
+              ▶▶ 2×
+            </button>
+
+            {/* 3x */}
+            <button
+              onClick={() => { sound.playClick(); handleSetSpeed(3.0); }}
+              className={`px-2 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                gameSpeed === 3.0 && !isPaused
+                  ? 'bg-sky-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Maximum Velocity (3×)"
+            >
+              ▶▶▶ 3×
+            </button>
+          </div>
+
+          {/* Combat Telemetry & Balancing Inspector */}
           <button
-            onClick={() => {
-              sound.playClick();
-              setGameSpeed(s => (s === 1.0 ? 2.0 : (s === 2.0 ? 4.0 : 1.0)));
-            }}
-            className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-sky-400 font-mono font-bold text-xs rounded-xl transition-colors cursor-pointer"
-            title="Game Simulation Speed"
+            onClick={() => { sound.playClick(); setTelemetryModalOpen(true); }}
+            className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-purple-400 hover:text-purple-300 transition-colors cursor-pointer"
+            title="Combat Telemetry & DPS Analytics"
           >
-            {gameSpeed}x
+            <Activity size={16} />
           </button>
 
           {/* Tactical Grid Toggle */}
@@ -463,6 +518,16 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
             setDragClientPos(null);
           }}
         />
+
+        {/* Wave Intelligence Card (Pre-launch tactical briefing) */}
+        {!waveActive && !sim.allWavesCleared && level.waves[currentWave - 1] && (
+          <WaveIntelligenceCard
+            waveIndex={currentWave}
+            totalWaves={level.waves.length}
+            waveDef={level.waves[currentWave - 1]}
+            onDeployWave={handleStartWave}
+          />
+        )}
 
         {/* Selected Tower Detailed Inspector */}
         {selectedTower && (
@@ -534,6 +599,14 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
         <TowerDiscoveryModal
           towerType={discoveredTower}
           onClose={() => setDiscoveredTower(null)}
+        />
+      )}
+
+      {/* Combat Telemetry & Balance Monitor Modal */}
+      {telemetryModalOpen && (
+        <TelemetryModal
+          sim={sim}
+          onClose={() => setTelemetryModalOpen(false)}
         />
       )}
     </div>

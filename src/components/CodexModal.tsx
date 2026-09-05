@@ -1,7 +1,20 @@
 import React, { useState } from 'react';
 import { TOWERS_DATA, ENEMIES_DATA } from '../data/gameData';
 import { TowerType, EnemyArchetype } from '../types/game';
-import { BookOpen, Shield, Skull, X, Zap, Target, Crosshair, ArrowRight } from 'lucide-react';
+import {
+  BookOpen,
+  Shield,
+  Skull,
+  X,
+  Target,
+  Crosshair,
+  TrendingUp,
+  AlertTriangle,
+  Zap,
+  MapPin,
+  CheckCircle2,
+  XCircle
+} from 'lucide-react';
 
 interface CodexModalProps {
   onClose: () => void;
@@ -32,13 +45,13 @@ export const CodexModal: React.FC<CodexModalProps> = ({ onClose }) => {
                 Citadel Tactical Codex
               </h2>
               <div className="text-xs text-slate-400">
-                Authoritative specifications for Citadel Defenders and Demonata Incursions
+                Strategic specifications, vulnerabilities, and combat synergies
               </div>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X size={20} />
           </button>
@@ -48,7 +61,7 @@ export const CodexModal: React.FC<CodexModalProps> = ({ onClose }) => {
         <div className="flex gap-2 my-3 shrink-0">
           <button
             onClick={() => setTab('towers')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
               tab === 'towers'
                 ? 'bg-sky-500 text-slate-950 font-black shadow-md'
                 : 'bg-slate-900 text-slate-400 hover:bg-slate-800'
@@ -59,7 +72,7 @@ export const CodexModal: React.FC<CodexModalProps> = ({ onClose }) => {
           </button>
           <button
             onClick={() => setTab('enemies')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
               tab === 'enemies'
                 ? 'bg-rose-500 text-white font-black shadow-md'
                 : 'bg-slate-900 text-slate-400 hover:bg-slate-800'
@@ -82,7 +95,7 @@ export const CodexModal: React.FC<CodexModalProps> = ({ onClose }) => {
                   <button
                     key={key}
                     onClick={() => setSelectedTower(key)}
-                    className={`px-3 py-2 rounded-xl text-left text-xs font-bold transition-all shrink-0 md:shrink flex items-center gap-2 border ${
+                    className={`px-3 py-2 rounded-xl text-left text-xs font-bold transition-all shrink-0 md:shrink flex items-center gap-2 border cursor-pointer ${
                       isSelected
                         ? 'bg-sky-950/80 border-sky-400 text-white shadow-sm'
                         : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-900 hover:text-slate-200'
@@ -106,7 +119,7 @@ export const CodexModal: React.FC<CodexModalProps> = ({ onClose }) => {
                   <button
                     key={key}
                     onClick={() => setSelectedEnemy(key)}
-                    className={`px-3 py-2 rounded-xl text-left text-xs font-bold transition-all shrink-0 md:shrink flex items-center gap-2 border ${
+                    className={`px-3 py-2 rounded-xl text-left text-xs font-bold transition-all shrink-0 md:shrink flex items-center gap-2 border cursor-pointer ${
                       isSelected
                         ? 'bg-rose-950/80 border-rose-400 text-white shadow-sm'
                         : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-900 hover:text-slate-200'
@@ -124,7 +137,7 @@ export const CodexModal: React.FC<CodexModalProps> = ({ onClose }) => {
           </div>
 
           {/* Details column */}
-          <div className="flex-1 bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 overflow-y-auto custom-scrollbar">
+          <div className="flex-1 overflow-y-auto pr-1.5 custom-scrollbar">
             {tab === 'towers' && activeTowerDef ? (
               <div className="space-y-4">
                 {/* Header */}
@@ -136,9 +149,16 @@ export const CodexModal: React.FC<CodexModalProps> = ({ onClose }) => {
                     {activeTowerDef.name[0]}
                   </div>
                   <div>
-                    <h3 className="font-display font-black text-xl text-white">
-                      {activeTowerDef.name}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-display font-black text-xl text-white">
+                        {activeTowerDef.name}
+                      </h3>
+                      {activeTowerDef.tacticalRole && (
+                        <span className="text-[10px] font-mono font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40 px-2 py-0.5 rounded uppercase">
+                          {activeTowerDef.tacticalRole}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-sky-400 font-semibold">{activeTowerDef.role}</div>
                   </div>
                 </div>
@@ -148,45 +168,96 @@ export const CodexModal: React.FC<CodexModalProps> = ({ onClose }) => {
                 </p>
 
                 {/* Base Stats */}
-                <div className="grid grid-cols-4 gap-2 text-center bg-slate-900/40 p-2.5 rounded-xl border border-slate-800 text-xs">
+                <div className="grid grid-cols-4 gap-2 text-center bg-slate-900/40 p-2.5 rounded-xl border border-slate-800 text-xs font-mono">
                   <div>
-                    <div className="text-[10px] text-slate-400 uppercase">Cost</div>
-                    <div className="font-mono font-bold text-yellow-300">{activeTowerDef.baseCost}g</div>
+                    <div className="text-[10px] text-slate-400 uppercase font-sans">Base Cost</div>
+                    <div className="font-bold text-yellow-400">{activeTowerDef.baseCost}g</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-slate-400 uppercase">Damage</div>
-                    <div className="font-mono font-bold text-emerald-400">{activeTowerDef.baseDamage}</div>
+                    <div className="text-[10px] text-slate-400 uppercase font-sans">Damage</div>
+                    <div className="font-bold text-emerald-400">{activeTowerDef.baseDamage}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-slate-400 uppercase">Speed</div>
-                    <div className="font-mono font-bold text-sky-400">{activeTowerDef.baseFireRate}/s</div>
+                    <div className="text-[10px] text-slate-400 uppercase font-sans">Cadence</div>
+                    <div className="font-bold text-sky-400">{activeTowerDef.baseFireRate}/s</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-slate-400 uppercase">Range</div>
-                    <div className="font-mono font-bold text-purple-400">{activeTowerDef.baseRange}</div>
+                    <div className="text-[10px] text-slate-400 uppercase font-sans">Range</div>
+                    <div className="font-bold text-amber-400">{activeTowerDef.baseRange}px</div>
                   </div>
                 </div>
 
-                {/* 3 Specialization Paths */}
-                <div className="space-y-3 pt-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                    <Target size={14} className="text-emerald-400" /> 3 Specialization Branches (5/2/0 Lock)
-                  </h4>
-                  {activeTowerDef.paths.map((path, idx) => (
-                    <div key={path.name} className="p-3 bg-slate-900/50 border border-slate-800 rounded-xl space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-sm text-white">
-                          Path {idx + 1}: {path.name}
+                {/* Tactical Effectiveness (Strong vs / Weak vs) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl space-y-1.5 text-xs">
+                    <div className="font-bold text-emerald-300 flex items-center gap-1.5">
+                      <CheckCircle2 size={14} className="text-emerald-400" />
+                      <span>Strong Against</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {(activeTowerDef.strongAgainst || ['Light Creeps', 'Demonic Infantry']).map((tgt, i) => (
+                        <span
+                          key={i}
+                          className="px-2 py-0.5 rounded bg-emerald-900/40 text-emerald-200 border border-emerald-500/20 text-[10px]"
+                        >
+                          {tgt}
                         </span>
-                        <span className="text-[10px] text-slate-400">{path.description}</span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-rose-950/30 border border-rose-500/30 rounded-xl space-y-1.5 text-xs">
+                    <div className="font-bold text-rose-300 flex items-center gap-1.5">
+                      <XCircle size={14} className="text-rose-400" />
+                      <span>Weak Against</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {(activeTowerDef.weakAgainst || ['Armored Plates', 'Swarm Floods']).map((tgt, i) => (
+                        <span
+                          key={i}
+                          className="px-2 py-0.5 rounded bg-rose-900/40 text-rose-200 border border-rose-500/20 text-[10px]"
+                        >
+                          {tgt}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tactical Synergies */}
+                {activeTowerDef.synergies && activeTowerDef.synergies.length > 0 && (
+                  <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-xl space-y-1.5 text-xs">
+                    <div className="font-bold text-sky-300 flex items-center gap-1.5">
+                      <TrendingUp size={14} className="text-sky-400" />
+                      <span>Battlefield Synergies</span>
+                    </div>
+                    <ul className="space-y-1 text-slate-300 text-[11px] list-disc list-inside">
+                      {activeTowerDef.synergies.map((syn, i) => (
+                        <li key={i}>{syn}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* 3 Specialization Paths */}
+                <div className="space-y-2">
+                  <div className="font-bold text-xs uppercase text-slate-300 tracking-wider">
+                    Specialization Paths (5/2/0 Lock)
+                  </div>
+                  {activeTowerDef.paths.map((path, idx) => (
+                    <div key={path.name} className="p-2.5 bg-slate-900/50 rounded-xl border border-slate-800 space-y-1">
+                      <div className="font-bold text-white text-xs">
+                        Path {idx + 1}: {path.name}
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-5 gap-1.5 pt-1">
-                        {path.tiers.map((tier, tIdx) => (
-                          <div key={tier.name} className="bg-slate-950/80 p-2 rounded-lg border border-slate-800/80 text-[11px]">
-                            <div className="font-bold text-sky-300">T{tIdx + 1}: {tier.name}</div>
-                            <div className="text-[10px] text-yellow-400 font-mono font-semibold">{tier.cost}g</div>
-                            <div className="text-[10px] text-slate-400 leading-tight mt-1">{tier.description}</div>
-                          </div>
+                      <div className="text-[11px] text-slate-400">{path.description}</div>
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {path.tiers.map((t, tIdx) => (
+                          <span
+                            key={t.name}
+                            className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px] text-slate-300 border border-slate-700"
+                          >
+                            T{tIdx + 1}: {t.name} ({t.cost}g)
+                          </span>
                         ))}
                       </div>
                     </div>
@@ -217,45 +288,119 @@ export const CodexModal: React.FC<CodexModalProps> = ({ onClose }) => {
                   </p>
 
                   {/* Enemy Stats */}
-                  <div className="grid grid-cols-4 gap-2 text-center bg-slate-900/40 p-2.5 rounded-xl border border-slate-800 text-xs">
+                  <div className="grid grid-cols-4 gap-2 text-center bg-slate-900/40 p-2.5 rounded-xl border border-slate-800 text-xs font-mono">
                     <div>
-                      <div className="text-[10px] text-slate-400 uppercase">Base HP</div>
-                      <div className="font-mono font-bold text-emerald-400">{activeEnemyDef.baseHp}</div>
+                      <div className="text-[10px] text-slate-400 uppercase font-sans">Base HP</div>
+                      <div className="font-bold text-emerald-400">{activeEnemyDef.baseHp}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] text-slate-400 uppercase">Speed</div>
-                      <div className="font-mono font-bold text-sky-400">{activeEnemyDef.baseSpeed}</div>
+                      <div className="text-[10px] text-slate-400 uppercase font-sans">Speed</div>
+                      <div className="font-bold text-sky-400">{activeEnemyDef.baseSpeed}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] text-slate-400 uppercase">Armor</div>
-                      <div className="font-mono font-bold text-amber-400">{activeEnemyDef.baseArmor}</div>
+                      <div className="text-[10px] text-slate-400 uppercase font-sans">Armor</div>
+                      <div className="font-bold text-amber-400">{activeEnemyDef.baseArmor}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] text-slate-400 uppercase">Reward</div>
-                      <div className="font-mono font-bold text-yellow-400">{activeEnemyDef.reward}g</div>
+                      <div className="text-[10px] text-slate-400 uppercase font-sans">Reward</div>
+                      <div className="font-bold text-yellow-400">{activeEnemyDef.reward}g</div>
                     </div>
                   </div>
 
-                  {/* Traits & Counter-tactics */}
-                  <div className="bg-slate-900/50 p-3.5 rounded-xl border border-slate-800 space-y-2 text-xs">
-                    <div className="font-bold text-slate-200">Traits & Tactical Counters:</div>
-                    <ul className="list-disc list-inside text-slate-400 space-y-1">
-                      {activeEnemyDef.isFlying && (
-                        <li className="text-sky-300">Airborne: Completely immune to ground artillery (Cannon, Mortar). Requires Ballista or Archer.</li>
-                      )}
-                      {activeEnemyDef.baseArmor > 0 && (
-                        <li className="text-amber-300">Armored: Flat reduction against physical damage. Weak to Mage Tower magic penetration and Pyromancer burns.</li>
-                      )}
-                      {activeEnemyDef.type === 'splitter' && (
-                        <li className="text-rose-300">Splitting: Spawns 2 Ember Mites upon death. Prepare Frost slows and splash defenses.</li>
-                      )}
-                      {activeEnemyDef.type === 'leech' && (
-                        <li className="text-purple-300">Vampiric Leech: Rapidly regenerates health unless ignited with continuous fire damage.</li>
-                      )}
-                      {activeEnemyDef.isBoss && (
-                        <li className="text-yellow-300">Boss Entity: Has 50% CC resistance against stun/freeze and 40% reduction against percentage-HP effects. Focus with Obelisk of Light.</li>
-                      )}
-                    </ul>
+                  {/* Threat Power Ranking Meters */}
+                  <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800 space-y-2 text-xs">
+                    <div className="font-bold text-slate-200">Threat Power Profile:</div>
+
+                    {/* HP Meter */}
+                    <div className="space-y-0.5">
+                      <div className="flex justify-between text-[10px] text-slate-400">
+                        <span>Endurance / HP Rank</span>
+                        <span className="font-mono text-emerald-400">{activeEnemyDef.hpRank || 4}/10</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-500 rounded-full"
+                          style={{ width: `${((activeEnemyDef.hpRank || 4) / 10) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Armor Meter */}
+                    <div className="space-y-0.5">
+                      <div className="flex justify-between text-[10px] text-slate-400">
+                        <span>Armor Density</span>
+                        <span className="font-mono text-amber-400">{activeEnemyDef.armorRank || 2}/10</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-amber-500 rounded-full"
+                          style={{ width: `${((activeEnemyDef.armorRank || 2) / 10) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Speed Meter */}
+                    <div className="space-y-0.5">
+                      <div className="flex justify-between text-[10px] text-slate-400">
+                        <span>Speed / Sprint Velocity</span>
+                        <span className="font-mono text-sky-400">{activeEnemyDef.speedRank || 5}/10</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-sky-500 rounded-full"
+                          style={{ width: `${((activeEnemyDef.speedRank || 5) / 10) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Weaknesses & Resistances */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl space-y-1.5">
+                      <div className="font-bold text-emerald-300 flex items-center gap-1.5">
+                        <Target size={14} className="text-emerald-400" />
+                        <span>Vulnerabilities / Weaknesses</span>
+                      </div>
+                      <div className="space-y-1">
+                        {(activeEnemyDef.weaknesses || ['Physical arrows', 'Frost slows']).map((w, i) => (
+                          <div key={i} className="text-[11px] text-slate-300 flex items-start gap-1">
+                            <span className="text-emerald-400">•</span>
+                            <span>{w}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-xl space-y-1.5">
+                      <div className="font-bold text-amber-300 flex items-center gap-1.5">
+                        <AlertTriangle size={14} className="text-amber-400" />
+                        <span>Resistances & Immunities</span>
+                      </div>
+                      <div className="space-y-1">
+                        {(activeEnemyDef.resistances || ['None']).map((r, i) => (
+                          <div key={i} className="text-[11px] text-slate-300 flex items-start gap-1">
+                            <span className="text-amber-400">•</span>
+                            <span>{r}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Behavior & Origin */}
+                  <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-xl space-y-2 text-xs">
+                    {activeEnemyDef.behavior && (
+                      <div>
+                        <div className="font-bold text-slate-300 mb-0.5">Behavior:</div>
+                        <p className="text-[11px] text-slate-400">{activeEnemyDef.behavior}</p>
+                      </div>
+                    )}
+                    {activeEnemyDef.firstEncountered && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-sky-400 pt-1 border-t border-slate-800">
+                        <MapPin size={13} />
+                        <span>First Encountered: {activeEnemyDef.firstEncountered}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )

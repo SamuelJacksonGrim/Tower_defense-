@@ -89,6 +89,10 @@ export interface TowerDef {
   paths: [TowerPathDef, TowerPathDef, TowerPathDef]; // Path 1, 2, 3
   color: string;
   accentColor: string;
+  tacticalRole?: 'CONTROL' | 'BURST DPS' | 'AOE SPLASH' | 'SNIPER' | 'SUPPORT' | 'CHAIN LIGHTNING' | 'MELTER' | 'SIEGE';
+  strongAgainst?: string[];
+  weakAgainst?: string[];
+  synergies?: string[];
 }
 
 export interface PlacedTower {
@@ -132,6 +136,13 @@ export interface EnemyDef {
   size: number;
   color: string;
   description: string;
+  weaknesses?: string[];
+  resistances?: string[];
+  behavior?: string;
+  firstEncountered?: string;
+  hpRank?: number; // 1-10
+  armorRank?: number; // 1-10
+  speedRank?: number; // 1-10
 }
 
 export interface StatusBag {

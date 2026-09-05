@@ -14,6 +14,7 @@ import {
 import { TOWERS_DATA, ENEMIES_DATA } from '../data/gameData';
 import { TDMath } from './TDMath';
 import { sound } from '../services/soundService';
+import { CombatTelemetry } from '../combat/CombatTelemetry';
 
 export interface SimEvents {
   onEnemyKilled?: (enemy: EnemyInstance) => void;
@@ -86,6 +87,9 @@ export class SimWorld {
     goldEarned: 0,
     livesLost: 0
   };
+
+  // Internal Combat Event & Telemetry Engine
+  public telemetry: CombatTelemetry = new CombatTelemetry();
 
   public events: SimEvents = {};
 
@@ -176,6 +180,12 @@ export class SimWorld {
     };
 
     this.towers.push(tower);
+    this.telemetry.logEvent('TowerPlaced', {
+      towerType: tower.type,
+      towerId: tower.id,
+      amount: finalCost,
+      meta: { slotIndex }
+    });
     return tower;
   }
 
@@ -257,6 +267,13 @@ export class SimWorld {
     this.events.onGoldChanged?.(this.gold);
     sound.playUpgrade();
 
+    this.telemetry.logEvent('TowerUpgraded', {
+      towerType: tower.type,
+      towerId: tower.id,
+      amount: check.cost,
+      meta: { pathIndex, newRank: tower.pathRanks[pathIndex] }
+    });
+
     // Visual burst particles around tower
     for (let i = 0; i < 12; i++) {
       const angle = (Math.PI * 2 * i) / 12;
@@ -290,6 +307,12 @@ export class SimWorld {
     this.events.onGoldChanged?.(this.gold);
     sound.playCoin();
 
+    this.telemetry.logEvent('TowerSold', {
+      towerType: tower.type,
+      towerId: tower.id,
+      amount: refund
+    });
+
     this.addFloatingText(tower.x, tower.y, `+${refund}g`, '#facc15');
     return refund;
   }
@@ -297,6 +320,26 @@ export class SimWorld {
   public setTowerPriority(towerId: string, priority: PlacedTower['targetPriority']) {
     const t = this.towers.find(tow => tow.id === towerId);
     if (t) t.targetPriority = priority;
+  }
+
+  /**
+   * Calculate hypothetical stats if tower advances 1 tier on specified path.
+   * Perfect for instant comparison UI (Damage, Rate, Range, Splash diffs).
+   */
+  public getHypotheticalUpgradeStats(tower: PlacedTower, pathIndex: 0 | 1 | 2) {
+    const hypotheticalRanks: [number, number, number] = [
+      tower.pathRanks[0],
+      tower.pathRanks[1],
+      tower.pathRanks[2]
+    ];
+    if (hypotheticalRanks[pathIndex] < 5) {
+      hypotheticalRanks[pathIndex] += 1;
+    }
+    const hypotheticalTower: PlacedTower = {
+      ...tower,
+      pathRanks: hypotheticalRanks
+    };
+    return this.getEffectiveTowerStats(hypotheticalTower);
   }
 
   /**
@@ -396,6 +439,8 @@ export class SimWorld {
       spawnedCount: 0,
       timer: group.delay
     }));
+
+    this.telemetry.onWaveStarted(this.currentWaveIndex + 1, currentWave.title);
 
     return true;
   }
@@ -506,6 +551,10 @@ export class SimWorld {
     };
 
     this.enemies.push(enemy);
+    this.telemetry.logEvent('EnemySpawned', {
+      enemyType: def.type,
+      enemyId: enemy.id
+    });
     return enemy;
   }
 
@@ -1020,6 +1069,14 @@ export class SimWorld {
       sourceTower.totalDamageDealt += amount;
     }
 
+    this.telemetry.logEvent('DamageDealt', {
+      towerType: sourceTower?.type,
+      towerId: sourceTower?.id,
+      enemyType: enemy.type,
+      enemyId: enemy.id,
+      amount
+    });
+
     // Floating text for big hits or crits
     if (amount >= 20 || isCrit || enemy.isBoss) {
       this.addFloatingText(enemy.x, enemy.y - 12, `-${amount}`, isCrit ? '#f43f5e' : '#f8fafc', isCrit);
@@ -1037,6 +1094,13 @@ export class SimWorld {
     if (killerTower) {
       killerTower.totalKills++;
     }
+
+    this.telemetry.logEvent('EnemyKilled', {
+      towerType: killerTower?.type,
+      towerId: killerTower?.id,
+      enemyType: enemy.type,
+      enemyId: enemy.id
+    });
 
     // Reward kill gold with Reward Growth formula (1.12 rate from workbook)
     const waveRewardMult = Math.pow(1.12, Math.min(15, this.currentWaveIndex) * 0.4);
@@ -1097,6 +1161,11 @@ export class SimWorld {
         enemy.leaked = true;
         enemy.alive = false;
 
+        this.telemetry.logEvent('EnemyLeaked', {
+          enemyType: enemy.type,
+          enemyId: enemy.id
+        });
+
         const leakCost = enemy.isBoss ? 5 : 1;
         this.lives = Math.max(0, this.lives - leakCost);
         this.stats.livesLost += leakCost;
@@ -1154,6 +1223,9 @@ export class SimWorld {
 
     if (allSpawned && livingCount === 0) {
       this.waveActive = false;
+
+      const completedWaveTitle = this.waves[this.currentWaveIndex]?.title || `Wave ${this.currentWaveIndex + 1}`;
+      this.telemetry.onWaveCompleted(this.currentWaveIndex + 1, completedWaveTitle);
 
       // Wave completion gold bonus from workbook: 50 * 1.10^wave (Income Growth 1.10)
       const waveBonus = Math.round(50 * Math.pow(1.10, this.currentWaveIndex + 1));
