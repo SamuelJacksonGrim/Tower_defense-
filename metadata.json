@@ -1,0 +1,6 @@
+{
+  "name": "TOWERDEF: Breach of Cold Hell",
+  "description": "Tactical supernatural tower defense game defending reality against the Demonata invasion from Cold Hell, featuring deep 3-path branching specializations, deterministic combat simulation, campaign progression, and endless mode.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
