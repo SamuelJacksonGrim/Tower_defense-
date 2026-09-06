@@ -401,4 +401,59 @@ export interface DailyTacticalChallengeDef {
   allowedTowers: TowerType[];
   activeModifiers: ChallengeModifierId[];
   targetWaves: number;
+  viabilityVerified?: boolean;
+  difficultyRating?: 'TACTICAL' | 'HEROIC' | 'MYTHIC';
 }
+
+export type ReplayActionType =
+  | 'place_tower'
+  | 'upgrade_path'
+  | 'sell_tower'
+  | 'set_priority'
+  | 'start_wave'
+  | 'set_speed';
+
+export interface ReplayAction {
+  tick: number;
+  type: ReplayActionType;
+  slotIndex?: number;
+  towerType?: TowerType;
+  pathIndex?: 0 | 1 | 2;
+  priority?: TargetingPriority;
+  waveIndex?: number;
+  speed?: number;
+}
+
+export interface BattleReplay {
+  version: number;
+  id: string;
+  timestamp: number;
+  levelNumber?: number;
+  levelTitle?: string;
+  mapId: string;
+  startingGold: number;
+  startingLives: number;
+  modifiers: ChallengeModifierId[];
+  actions: ReplayAction[];
+  stats?: {
+    totalTicks: number;
+    wavesCleared: number;
+    totalDamage: number;
+    demonsSlain: number;
+    goldEarned: number;
+  };
+}
+
+export interface SynergyNotice {
+  name: string;
+  rating: 'HIGH' | 'MEDIUM' | 'LOW';
+  description: string;
+}
+
+export interface BuildAnalysis {
+  composition: Record<string, number>;
+  synergies: SynergyNotice[];
+  weaknesses: string[];
+  recommendations: string[];
+}
+

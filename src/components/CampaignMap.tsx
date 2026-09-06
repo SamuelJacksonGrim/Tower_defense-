@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CAMPAIGN_LEVELS, MAPS_DATA, TOWERS_DATA } from '../data/gameData';
 import { CampaignLevel, GameSaveState } from '../types/game';
-import { Star, Skull, Lock, Play, Shield, Coins, Sparkles, Trophy, Volume2, VolumeX, Check, Flame, Snowflake, Mountain } from 'lucide-react';
+import { Star, Skull, Lock, Play, Shield, Coins, Sparkles, Trophy, Volume2, VolumeX, Check, Flame, Snowflake, Mountain, Film, FlaskConical } from 'lucide-react';
 import { sound } from '../services/soundService';
 
 interface CampaignMapProps {
@@ -12,6 +12,8 @@ interface CampaignMapProps {
   onOpenBounties: () => void;
   onOpenCodex: () => void;
   onOpenStore: () => void;
+  onOpenReplays: () => void;
+  onOpenBalanceLab: () => void;
 }
 
 export const CampaignMap: React.FC<CampaignMapProps> = ({
@@ -21,7 +23,9 @@ export const CampaignMap: React.FC<CampaignMapProps> = ({
   onOpenEndless,
   onOpenBounties,
   onOpenCodex,
-  onOpenStore
+  onOpenStore,
+  onOpenReplays,
+  onOpenBalanceLab
 }) => {
   const [selectedLevelNumber, setSelectedLevelNumber] = useState<number>(
     Math.min(20, saveState.campaignMaxLevel)
@@ -127,6 +131,26 @@ export const CampaignMap: React.FC<CampaignMapProps> = ({
               className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-xs font-semibold text-slate-300 flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
             >
               <span>Codex</span>
+            </button>
+
+            {/* Replay Theater */}
+            <button
+              onClick={() => { sound.playClick(); onOpenReplays(); }}
+              className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-xs font-semibold text-slate-300 flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+              title="Battle Recording & Replay Theater"
+            >
+              <Film size={13} className="text-amber-400" />
+              <span className="hidden sm:inline">Replays</span>
+            </button>
+
+            {/* Balance Lab */}
+            <button
+              onClick={() => { sound.playClick(); onOpenBalanceLab(); }}
+              className="px-2.5 py-1.5 bg-purple-950/60 hover:bg-purple-900/70 border border-purple-500/40 rounded-xl text-xs font-semibold text-purple-300 flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+              title="Empirical Balance Laboratory"
+            >
+              <FlaskConical size={13} className="text-purple-400" />
+              <span className="hidden sm:inline">Lab</span>
             </button>
 
             {/* Store */}

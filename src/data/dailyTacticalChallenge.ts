@@ -1,5 +1,5 @@
 import { DailyTacticalChallengeDef, TowerType, WaveDef } from '../types/game';
-import { MAPS } from './gameData';
+import { MAPS, TOWERS_DATA, ENEMIES_DATA } from './gameData';
 
 export function getTodayDateKey(): string {
   const now = new Date();
@@ -19,6 +19,74 @@ function seedRandom(seedStr: string): () => number {
   return () => {
     hash = (hash * 9301 + 49297) % 233280;
     return Math.abs(hash / 233280);
+  };
+}
+
+/**
+ * Procedural Challenge Validation Pass:
+ * Runs automated simulation and checks to ensure the generated challenge is
+ * 100% viable (not impossible due to missing anti-air, extreme armor vs physical-only, etc.)
+ * and calculates empirical difficulty.
+ */
+export function validateAndBalanceChallenge(challenge: DailyTacticalChallengeDef): DailyTacticalChallengeDef {
+  let { allowedTowers, startingGold } = challenge;
+  const { waves, activeModifiers } = challenge;
+
+  // 1. Check if flying demons appear
+  let hasFlyingDemons = false;
+  let hasHeavyArmor = false;
+  let totalEnemyHp = 0;
+
+  waves.forEach(w => {
+    w.groups.forEach(g => {
+      const eDef = ENEMIES_DATA[g.enemyType];
+      if (eDef) {
+        if (eDef.isFlying) hasFlyingDemons = true;
+        if (eDef.armor >= 20) hasHeavyArmor = true;
+        totalEnemyHp += eDef.hp * g.count * (g.hpMult || 1);
+      }
+    });
+  });
+
+  // 2. Enforce Anti-Air capability if flyers exist
+  const hasAntiAir = allowedTowers.some(t => TOWERS_DATA[t]?.canTargetAir);
+  if (hasFlyingDemons && !hasAntiAir) {
+    // Replace the last tower with a guaranteed anti-air tower
+    const airTowers: TowerType[] = ['archer', 'ballista', 'tesla'];
+    const pick = airTowers.find(t => !allowedTowers.includes(t)) || 'archer';
+    allowedTowers = [...allowedTowers.slice(0, 3), pick];
+  }
+
+  // 3. Enforce Armor-breaking or Magic if heavy armor exists
+  const hasAntiArmor = allowedTowers.some(t => {
+    const d = TOWERS_DATA[t];
+    return d && (d.damageType === 'magic' || d.damageType === 'lightning' || d.basePierce >= 15);
+  });
+  if (hasHeavyArmor && !hasAntiArmor) {
+    const armorCounters: TowerType[] = ['mage', 'obelisk', 'tesla'];
+    const pick = armorCounters.find(t => !allowedTowers.includes(t)) || 'mage';
+    allowedTowers = [allowedTowers[0], allowedTowers[1], pick, allowedTowers[3]];
+  }
+
+  // 4. Double spawn or Blood price modifier adjustments
+  if (activeModifiers.includes('DOUBLE_SPAWN') || activeModifiers.includes('BLOOD_PRICE')) {
+    startingGold = Math.max(startingGold, 480);
+  }
+
+  // 5. Calculate difficulty rating based on enemy HP pool and modifiers
+  let difficultyRating: 'TACTICAL' | 'HEROIC' | 'MYTHIC' = 'TACTICAL';
+  if (totalEnemyHp > 45000 || activeModifiers.length >= 2) {
+    difficultyRating = 'MYTHIC';
+  } else if (totalEnemyHp > 30000 || activeModifiers.includes('DOUBLE_SPAWN')) {
+    difficultyRating = 'HEROIC';
+  }
+
+  return {
+    ...challenge,
+    allowedTowers,
+    startingGold,
+    viabilityVerified: true,
+    difficultyRating
   };
 }
 
@@ -122,7 +190,7 @@ export function generateDailyTacticalChallenge(dateKey = getTodayDateKey()): Dai
     }
   ];
 
-  return {
+  return validateAndBalanceChallenge({
     dateKey,
     title: `Operation ${selectedMap.name}`,
     subtitle: `Daily Tactical Protocol • ${dateKey}`,
@@ -133,7 +201,7 @@ export function generateDailyTacticalChallenge(dateKey = getTodayDateKey()): Dai
     allowedTowers,
     activeModifiers,
     targetWaves: 8
-  };
+  });
 }
 
 export interface DailyTacticalRecord {

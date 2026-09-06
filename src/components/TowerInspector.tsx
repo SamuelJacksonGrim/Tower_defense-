@@ -3,6 +3,8 @@ import { PlacedTower, TargetingPriority, EnemyInstance } from '../types/game';
 import { TOWERS_DATA } from '../data/gameData';
 import { SimWorld } from '../sim/SimWorld';
 import { TDMath } from '../sim/TDMath';
+import { BuildAnalyzer } from '../sim/BuildAnalyzer';
+import { TowerComparisonModal } from './TowerComparisonModal';
 import {
   X,
   ShieldAlert,
@@ -17,7 +19,10 @@ import {
   Activity,
   Target,
   Zap,
-  AlertTriangle
+  AlertTriangle,
+  ArrowRightLeft,
+  Award,
+  Layers
 } from 'lucide-react';
 
 interface TowerInspectorProps {
@@ -56,19 +61,41 @@ export const TowerInspector: React.FC<TowerInspectorProps> = ({
   onClearAnalyzedEnemy
 }) => {
   const [hoveredPathIndex, setHoveredPathIndex] = useState<0 | 1 | 2 | null>(null);
+  const [activeTab, setActiveTab] = useState<'inspector' | 'build_advisor'>('inspector');
+  const [isComparing, setIsComparing] = useState(false);
 
   const def = TOWERS_DATA[tower.type];
   const stats = sim.getEffectiveTowerStats(tower);
   const refundGold = Math.round(tower.totalInvestedGold * 0.75);
 
-  // DPS in Practice calculations
-  const towerActiveSeconds = Math.max(1, (sim.totalWaveActiveTime || 0) - (tower.placedAtTime || 0));
-  const actualDps = Math.round(tower.totalDamageDealt / towerActiveSeconds);
+  // Exact Requested DPS & Efficiency metrics
+  const lifetimeSec = Math.max(0.1, (sim.totalWaveActiveTime || 0) - (tower.placedAtTime || 0));
+  const actualDps = Math.round((tower.totalDamageDealt / lifetimeSec) * 10) / 10;
   const theoreticalDps = stats.dps;
-  const rawUptime = tower.activeCombatSeconds && towerActiveSeconds > 0
-    ? Math.round((tower.activeCombatSeconds / towerActiveSeconds) * 100)
-    : (theoreticalDps > 0 ? Math.min(100, Math.round((actualDps / theoreticalDps) * 100)) : 0);
+  const rawUptime = tower.activeCombatSeconds && lifetimeSec > 0
+    ? Math.round((tower.activeCombatSeconds / lifetimeSec) * 1000) / 10
+    : (theoreticalDps > 0 ? Math.min(100, Math.round((actualDps / theoreticalDps) * 1000) / 10) : 0);
   const uptime = Math.min(100, Math.max(0, rawUptime));
+  const damagePerGold = (tower.totalDamageDealt / Math.max(1, tower.totalInvestedGold)).toFixed(2);
+
+  // Percentile calculation across all placed towers
+  const allEff = sim.towers.map(t => t.totalDamageDealt / Math.max(1, t.totalInvestedGold));
+  const currentEff = tower.totalDamageDealt / Math.max(1, tower.totalInvestedGold);
+  let percentile = 50;
+  if (sim.towers.length > 1) {
+    const belowCount = allEff.filter(e => e < currentEff).length;
+    percentile = Math.round((belowCount / (sim.towers.length - 1)) * 100);
+  } else {
+    percentile = Math.min(99, Math.max(15, Math.round(Math.min(99, currentEff * 3.8))));
+  }
+
+  const getOrdinalSuffix = (n: number) => {
+    const s = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return s[(v - 20) % 10] || s[v] || s[0];
+  };
+
+  const buildAnalysis = BuildAnalyzer.analyze(sim.towers);
 
   // Target Analysis calculations
   let enemyAnalysis = null;
@@ -152,17 +179,157 @@ export const TowerInspector: React.FC<TowerInspectorProps> = ({
             </div>
           </div>
         </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setIsComparing(true)}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-sky-600/30 hover:bg-sky-600/50 text-sky-200 border border-sky-400/40 transition-all cursor-pointer"
+            title="Compare with another tower or catalog"
+          >
+            <ArrowRightLeft size={12} />
+            <span>Compare</span>
+          </button>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      </div>
+
+      {/* Mode Tabs */}
+      <div className="flex items-center gap-1 pt-2 pb-1 border-b border-slate-800/80 shrink-0 text-xs">
         <button
-          onClick={onClose}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+          onClick={() => setActiveTab('inspector')}
+          className={`flex-1 py-1.5 rounded-lg font-bold text-[11px] uppercase tracking-wider transition-all cursor-pointer ${
+            activeTab === 'inspector'
+              ? 'bg-slate-800 text-white shadow-sm border border-slate-700/80'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+          }`}
         >
-          <X size={18} />
+          Upgrades & Status
+        </button>
+        <button
+          onClick={() => setActiveTab('build_advisor')}
+          className={`flex-1 py-1.5 rounded-lg font-bold text-[11px] uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+            activeTab === 'build_advisor'
+              ? 'bg-indigo-600/30 text-indigo-200 shadow-sm border border-indigo-500/50'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+          }`}
+        >
+          <Layers size={13} className="text-indigo-400" />
+          <span>Build Advisor</span>
+          {buildAnalysis.synergies.length > 0 && (
+            <span className="w-4 h-4 rounded-full bg-indigo-500 text-white font-mono text-[9px] flex items-center justify-center font-bold">
+              {buildAnalysis.synergies.length}
+            </span>
+          )}
         </button>
       </div>
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto space-y-3 pr-1 pt-3 custom-scrollbar text-xs">
-        {/* Core Stats Overview */}
+        {activeTab === 'build_advisor' ? (
+          /* BUILD ADVISOR VIEW */
+          <div className="space-y-3 animate-fade-in font-mono">
+            {/* Header Banner */}
+            <div className="bg-gradient-to-r from-indigo-950/80 to-slate-900/80 p-3 rounded-xl border border-indigo-500/40">
+              <div className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <Layers size={13} /> Sector Build Analysis
+              </div>
+              <p className="text-[11px] font-sans text-slate-300 leading-relaxed">
+                Deterministic tactical fleet evaluation calculated directly from weapon archetypes and damage interactions.
+              </p>
+            </div>
+
+            {/* Current Composition */}
+            <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800/80">
+              <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-2 font-sans">
+                Current Fleet Composition ({sim.towers.length} Towers)
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {Object.entries(buildAnalysis.composition).map(([name, count]) => (
+                  <div key={name} className="flex items-center justify-between p-1.5 bg-slate-950/60 rounded border border-slate-800/60 text-xs">
+                    <span className="text-slate-300 truncate">{name}</span>
+                    <span className="text-emerald-400 font-bold ml-2">×{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Synergies Active */}
+            <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800/80">
+              <div className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider mb-2 font-sans flex items-center justify-between">
+                <span>Active Synergies</span>
+                <span className="text-[9px] text-slate-500">{buildAnalysis.synergies.length} Detected</span>
+              </div>
+              {buildAnalysis.synergies.length > 0 ? (
+                <div className="space-y-2">
+                  {buildAnalysis.synergies.map((syn, idx) => (
+                    <div key={idx} className="p-2 bg-slate-950/70 rounded-lg border border-emerald-500/30 text-[11px]">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-emerald-300 font-bold flex items-center gap-1">
+                          ✓ {syn.name}
+                        </span>
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+                          syn.rating === 'HIGH' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        }`}>
+                          {syn.rating}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-sans leading-relaxed">
+                        {syn.description}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-[11px] text-slate-400 italic p-2 bg-slate-950/40 rounded border border-slate-800 font-sans">
+                  No synergistic combinations active. Pair Frost with heavy physical or Snipers with executioners.
+                </div>
+              )}
+            </div>
+
+            {/* Tactical Weaknesses */}
+            <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800/80">
+              <div className="text-[10px] uppercase font-bold text-amber-400 tracking-wider mb-2 font-sans">
+                Tactical Weaknesses
+              </div>
+              {buildAnalysis.weaknesses.length > 0 ? (
+                <div className="space-y-1.5">
+                  {buildAnalysis.weaknesses.map((w, idx) => (
+                    <div key={idx} className="p-2 bg-amber-950/30 rounded border border-amber-500/30 text-[11px] text-amber-200/90 font-sans flex items-start gap-1.5">
+                      <span className="text-amber-400 shrink-0">⚠</span>
+                      <span>{w}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-[11px] text-emerald-300 p-2 bg-emerald-950/20 rounded border border-emerald-500/30 font-sans">
+                  ✓ Fleet has full anti-air, armor penetration, and area crowd-control coverage.
+                </div>
+              )}
+            </div>
+
+            {/* Recommendations */}
+            <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800/80">
+              <div className="text-[10px] uppercase font-bold text-sky-400 tracking-wider mb-2 font-sans">
+                Tactical Recommendations
+              </div>
+              <div className="space-y-1.5">
+                {buildAnalysis.recommendations.map((rec, idx) => (
+                  <div key={idx} className="p-2 bg-sky-950/30 rounded border border-sky-500/30 text-[11px] text-sky-200 font-sans flex items-start gap-1.5">
+                    <span className="text-sky-400 shrink-0">→</span>
+                    <span>{rec}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* STANDARD UPGRADE & STATUS INSPECTOR */
+          <>
+            {/* Core Stats Overview */}
         <div className="grid grid-cols-4 gap-2 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80 text-center">
           <div>
             <div className="text-[10px] text-slate-400 uppercase">Damage</div>
@@ -183,32 +350,57 @@ export const TowerInspector: React.FC<TowerInspectorProps> = ({
         </div>
 
         {/* 2. Tower DPS in Practice & Combat Efficiency */}
-        <div className="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800/80">
+        <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/90 shadow-inner">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-slate-300 flex items-center gap-1.5 font-semibold text-[11px]">
-              <Activity size={13} className="text-emerald-400" /> DPS in Practice
+            <span className="text-slate-200 flex items-center gap-1.5 font-bold text-xs uppercase tracking-wider">
+              <Activity size={14} className="text-emerald-400" /> Tactical Combat Efficiency
             </span>
-            <span className="text-[10px] text-slate-400 font-mono">
-              Uptime: <strong className={uptime >= 70 ? 'text-emerald-400' : 'text-amber-400'}>{uptime}%</strong>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+              {percentile}{getOrdinalSuffix(percentile)} percentile
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-[11px] font-mono mb-2">
-            <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
-              <div className="text-[9px] text-slate-400 font-sans uppercase">Theoretical DPS</div>
-              <div className="text-sm font-bold text-slate-200">{theoreticalDps}</div>
+          {/* Detailed Metric Spec as requested */}
+          <div className="grid grid-cols-2 gap-2 text-xs font-mono mb-2">
+            <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800/80">
+              <div className="text-[9px] text-slate-400 font-sans uppercase">Lifetime</div>
+              <div className="text-sm font-bold text-slate-200">{lifetimeSec.toFixed(1)}s</div>
             </div>
-            <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
+            <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800/80">
+              <div className="text-[9px] text-slate-400 font-sans uppercase">Damage Dealt</div>
+              <div className="text-sm font-bold text-slate-200">{tower.totalDamageDealt.toLocaleString()}</div>
+            </div>
+
+            <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800/80">
               <div className="text-[9px] text-slate-400 font-sans uppercase">Actual DPS</div>
               <div className={`text-sm font-bold ${actualDps >= theoreticalDps * 0.7 ? 'text-emerald-400' : 'text-amber-400'}`}>
                 {actualDps}
               </div>
             </div>
-          </div>
+            <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800/80">
+              <div className="text-[9px] text-slate-400 font-sans uppercase">Theoretical DPS</div>
+              <div className="text-sm font-bold text-purple-400">{theoreticalDps}</div>
+            </div>
 
-          <div className="flex items-center justify-between text-[10px] text-slate-400 px-1 font-mono border-t border-slate-800/60 pt-1.5">
-            <span>Damage: <strong className="text-slate-200">{tower.totalDamageDealt.toLocaleString()}</strong></span>
-            <span>Kills: <strong className="text-emerald-400">{tower.totalKills}</strong></span>
+            <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800/80">
+              <div className="text-[9px] text-slate-400 font-sans uppercase">Combat Uptime</div>
+              <div className={`text-sm font-bold ${uptime >= 70 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {uptime}%
+              </div>
+            </div>
+            <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800/80">
+              <div className="text-[9px] text-slate-400 font-sans uppercase">Kills</div>
+              <div className="text-sm font-bold text-emerald-400">{tower.totalKills}</div>
+            </div>
+
+            <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800/80">
+              <div className="text-[9px] text-slate-400 font-sans uppercase">Gold Invested</div>
+              <div className="text-sm font-bold text-yellow-400">{tower.totalInvestedGold}g</div>
+            </div>
+            <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800/80">
+              <div className="text-[9px] text-slate-400 font-sans uppercase">Damage / Gold</div>
+              <div className="text-sm font-bold text-sky-400">{damagePerGold}</div>
+            </div>
           </div>
         </div>
 
@@ -547,6 +739,8 @@ export const TowerInspector: React.FC<TowerInspectorProps> = ({
             <p className="text-[10px] text-slate-400 leading-relaxed">{def.synergies[0]}</p>
           </div>
         )}
+          </>
+        )}
       </div>
 
       {/* 5. Sell / Refund Clarity Footer */}
@@ -568,6 +762,15 @@ export const TowerInspector: React.FC<TowerInspectorProps> = ({
           <span>Dismantle & Refund {refundGold} Gold</span>
         </button>
       </div>
+
+      {/* Comparison Modal */}
+      {isComparing && (
+        <TowerComparisonModal
+          primaryTower={tower}
+          sim={sim}
+          onClose={() => setIsComparing(false)}
+        />
+      )}
     </div>
   );
 };

@@ -12,6 +12,7 @@ import { WaveIntelligenceCard } from './WaveIntelligenceCard';
 import { TelemetryModal } from './TelemetryModal';
 import { RunSummaryModal } from './RunSummaryModal';
 import { sound } from '../services/soundService';
+import { replayManager } from '../services/ReplayManager';
 import {
   Heart,
   Coins,
@@ -138,9 +139,28 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
           techPoints: saveState.techPoints + stars,
           totalDemonsKilled: saveState.totalDemonsKilled + (simRef.current?.stats.demonsSlain || 0)
         });
+
+        if (simRef.current) {
+          replayManager.stopRecording({
+            totalTicks: simRef.current.ticks,
+            wavesCleared: simRef.current.currentWaveIndex,
+            totalDamage: simRef.current.stats.totalDamageDealt,
+            demonsSlain: simRef.current.stats.demonsSlain,
+            goldEarned: simRef.current.stats.goldEarned
+          });
+        }
       },
       onLevelDefeat: () => {
         setDefeatModalOpen(true);
+        if (simRef.current) {
+          replayManager.stopRecording({
+            totalTicks: simRef.current.ticks,
+            wavesCleared: simRef.current.currentWaveIndex,
+            totalDamage: simRef.current.stats.totalDamageDealt,
+            demonsSlain: simRef.current.stats.demonsSlain,
+            goldEarned: simRef.current.stats.goldEarned
+          });
+        }
       }
     };
   }, [autoStartWaves, level, saveState, onSaveProgress]);
@@ -153,10 +173,11 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
   // Reset or restart simulation
   const initSimulation = useCallback((bonusGold: number = 0) => {
     const activeMap = MAPS_DATA[level.mapId] || MAPS_DATA.map1;
+    const startingGold = level.startingGold + bonusGold + (saveState.removeAdsUnlocked ? 200 : 0);
     const newSim = new SimWorld(
       activeMap,
       level.waves,
-      level.startingGold + bonusGold + (saveState.removeAdsUnlocked ? 200 : 0),
+      startingGold,
       level.startingLives,
       saveState.techTree
     );
@@ -164,6 +185,17 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
     newSim.gameSpeed = gameSpeed;
     attachEvents(newSim);
     simRef.current = newSim;
+
+    // Begin recording battle replay
+    replayManager.startRecording(
+      level.mapId,
+      startingGold,
+      level.startingLives,
+      [],
+      level.levelNumber,
+      level.title
+    );
+
     setSim(newSim);
     setGold(newSim.gold);
     setLives(newSim.lives);
@@ -173,12 +205,15 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
     setBuildCandidateType(null);
     setVictoryModalOpen(false);
     setDefeatModalOpen(false);
-  }, [level, saveState, attachEvents]);
+  }, [level, saveState, attachEvents, gameSpeed]);
 
   const handleSetSpeed = (speed: number) => {
     setGameSpeed(speed);
     localStorage.setItem('citadel_game_speed', speed.toString());
-    if (simRef.current) simRef.current.gameSpeed = speed;
+    if (simRef.current) {
+      simRef.current.gameSpeed = speed;
+      replayManager.recordAction({ tick: simRef.current.ticks, type: 'set_speed', speed });
+    }
   };
 
   // Trigger re-init only if level number or map changes
@@ -271,6 +306,11 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
   const handleStartWave = () => {
     if (simRef.current) {
       sound.playWaveStart();
+      replayManager.recordAction({
+        tick: simRef.current.ticks,
+        type: 'start_wave',
+        waveIndex: simRef.current.currentWaveIndex
+      });
       const started = simRef.current.startNextWave();
       if (started) {
         setWaveActive(true);
@@ -284,6 +324,13 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
 
     const placed = simRef.current.placeTower(typeToBuild, slotIndex);
     if (placed) {
+      replayManager.recordAction({
+        tick: simRef.current.ticks,
+        type: 'place_tower',
+        slotIndex,
+        towerType: typeToBuild
+      });
+
       setSelectedSlotIndex(null);
       const def = TOWERS_DATA[typeToBuild];
       const cost = Math.round(def.baseCost * simRef.current.techModifiers.costDiscountMult);
@@ -311,6 +358,12 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
     if (!selectedTower || !simRef.current) return;
     const success = simRef.current.upgradePath(selectedTower.id, pathIndex);
     if (success) {
+      replayManager.recordAction({
+        tick: simRef.current.ticks,
+        type: 'upgrade_path',
+        slotIndex: selectedTower.slotIndex,
+        pathIndex
+      });
       const updated = simRef.current.towers.find(t => t.id === selectedTower.id);
       if (updated) setSelectedTower({ ...updated });
     }
@@ -318,12 +371,23 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
 
   const handleSellTower = () => {
     if (!selectedTower || !simRef.current) return;
+    replayManager.recordAction({
+      tick: simRef.current.ticks,
+      type: 'sell_tower',
+      slotIndex: selectedTower.slotIndex
+    });
     simRef.current.sellTower(selectedTower.id);
     setSelectedTower(null);
   };
 
   const handlePriorityChange = (priority: TargetingPriority) => {
     if (!selectedTower || !simRef.current) return;
+    replayManager.recordAction({
+      tick: simRef.current.ticks,
+      type: 'set_priority',
+      slotIndex: selectedTower.slotIndex,
+      priority
+    });
     simRef.current.setTowerPriority(selectedTower.id, priority);
     const updated = simRef.current.towers.find(t => t.id === selectedTower.id);
     if (updated) setSelectedTower({ ...updated });

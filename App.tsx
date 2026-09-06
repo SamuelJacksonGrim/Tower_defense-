@@ -8,6 +8,8 @@ import { DailyBountyModal } from './src/components/DailyBountyModal';
 import { EndlessModeModal } from './src/components/EndlessModeModal';
 import { CodexModal } from './src/components/CodexModal';
 import { MonetizationModal } from './src/components/MonetizationModal';
+import { BalanceLaboratoryModal } from './src/components/BalanceLaboratoryModal';
+import { ReplayViewerModal } from './src/components/ReplayViewerModal';
 import { sound } from './src/services/soundService';
 
 const SAVE_STORAGE_KEY = 'towerdef_cold_hell_save_v1';
@@ -67,6 +69,8 @@ export const App: React.FC = () => {
   const [endlessOpen, setEndlessOpen] = useState<boolean>(false);
   const [codexOpen, setCodexOpen] = useState<boolean>(false);
   const [storeOpen, setStoreOpen] = useState<boolean>(false);
+  const [balanceLabOpen, setBalanceLabOpen] = useState<boolean>(false);
+  const [replaysOpen, setReplaysOpen] = useState<boolean>(false);
 
   // Save changes to localStorage whenever saveState updates
   useEffect(() => {
@@ -154,6 +158,8 @@ export const App: React.FC = () => {
           onOpenBounties={() => setBountiesOpen(true)}
           onOpenCodex={() => setCodexOpen(true)}
           onOpenStore={() => setStoreOpen(true)}
+          onOpenReplays={() => setReplaysOpen(true)}
+          onOpenBalanceLab={() => setBalanceLabOpen(true)}
         />
       ) : (
         <ActiveGameScreen
