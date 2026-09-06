@@ -10,6 +10,7 @@ import { BattleDefeatModal } from './BattleDefeatModal';
 import { TowerDiscoveryModal } from './TowerDiscoveryModal';
 import { WaveIntelligenceCard } from './WaveIntelligenceCard';
 import { TelemetryModal } from './TelemetryModal';
+import { RunSummaryModal } from './RunSummaryModal';
 import { sound } from '../services/soundService';
 import {
   Heart,
@@ -24,7 +25,8 @@ import {
   Skull,
   Radio,
   Grid3X3,
-  Activity
+  Activity,
+  BarChart2
 } from 'lucide-react';
 
 interface ActiveGameScreenProps {
@@ -61,9 +63,12 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
   const [soundMuted, setSoundMuted] = useState<boolean>(false);
   const [autoStartWaves, setAutoStartWaves] = useState<boolean>(false);
   const [telemetryModalOpen, setTelemetryModalOpen] = useState<boolean>(false);
+  const [runSummaryOpen, setRunSummaryOpen] = useState<boolean>(false);
+  const [runSummaryScope, setRunSummaryScope] = useState<'wave' | 'run'>('run');
 
   // Selection & Building State
   const [selectedTower, setSelectedTower] = useState<PlacedTower | null>(null);
+  const [analyzedEnemyId, setAnalyzedEnemyId] = useState<string | null>(null);
   const [buildCandidateType, setBuildCandidateType] = useState<TowerType | null>(null);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [multiBuildMode, setMultiBuildMode] = useState<boolean>(false);
@@ -452,6 +457,19 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
             </button>
           </div>
 
+          {/* Run Summary Button */}
+          <button
+            onClick={() => {
+              sound.playClick();
+              setRunSummaryScope('run');
+              setRunSummaryOpen(true);
+            }}
+            className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-sky-400 hover:text-sky-300 transition-colors cursor-pointer"
+            title="Tactical Run Summary"
+          >
+            <BarChart2 size={16} />
+          </button>
+
           {/* Combat Telemetry & Balancing Inspector */}
           <button
             onClick={() => { sound.playClick(); setTelemetryModalOpen(true); }}
@@ -501,13 +519,17 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
           onSelectTower={(t) => {
             setSelectedTower(t);
             if (t) setSelectedSlotIndex(null);
+            else setAnalyzedEnemyId(null);
           }}
           buildCandidateType={buildCandidateType}
           onSelectSlotToBuild={handleSelectSlotToBuild}
           selectedSlotIndex={selectedSlotIndex}
           onSelectEmptySlot={(slotIdx) => {
             setSelectedSlotIndex(slotIdx);
-            if (slotIdx !== null) setSelectedTower(null);
+            if (slotIdx !== null) {
+              setSelectedTower(null);
+              setAnalyzedEnemyId(null);
+            }
           }}
           showGrid={showTacticalGrid}
           draggedTowerType={draggedTowerType}
@@ -517,6 +539,8 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
             setDraggedTowerType(null);
             setDragClientPos(null);
           }}
+          analyzedEnemyId={analyzedEnemyId}
+          onSelectEnemyForAnalysis={(enemy) => setAnalyzedEnemyId(enemy ? (typeof enemy === 'string' ? enemy : enemy.id) : null)}
         />
 
         {/* Wave Intelligence Card (Pre-launch tactical briefing) */}
@@ -534,10 +558,15 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
           <TowerInspector
             tower={selectedTower}
             sim={sim}
-            onClose={() => setSelectedTower(null)}
+            onClose={() => {
+              setSelectedTower(null);
+              setAnalyzedEnemyId(null);
+            }}
             onUpgrade={handleUpgradePath}
             onSell={handleSellTower}
             onPriorityChange={handlePriorityChange}
+            analyzedEnemy={analyzedEnemyId ? (sim.enemies.find(e => e.id === analyzedEnemyId) || null) : null}
+            onClearAnalyzedEnemy={() => setAnalyzedEnemyId(null)}
           />
         )}
       </div>
@@ -550,6 +579,7 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
           setBuildCandidateType(type);
           if (type) {
             setSelectedTower(null);
+            setAnalyzedEnemyId(null);
             if (selectedSlotIndex !== null) {
               handleSelectSlotToBuild(selectedSlotIndex, type);
             }
@@ -583,6 +613,10 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
           }}
           onReplay={() => initSimulation()}
           onReturnToMap={onReturnToMap}
+          onViewSummary={() => {
+            setRunSummaryScope('run');
+            setRunSummaryOpen(true);
+          }}
         />
       )}
 
@@ -592,6 +626,10 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
           demonsSlain={sim.stats.demonsSlain}
           onRetry={(bonusGold = 0) => initSimulation(bonusGold)}
           onReturnToMap={onReturnToMap}
+          onViewSummary={() => {
+            setRunSummaryScope('run');
+            setRunSummaryOpen(true);
+          }}
         />
       )}
 
@@ -607,6 +645,16 @@ export const ActiveGameScreen: React.FC<ActiveGameScreenProps> = ({
         <TelemetryModal
           sim={sim}
           onClose={() => setTelemetryModalOpen(false)}
+        />
+      )}
+
+      {/* Run Summary Modal */}
+      {runSummaryOpen && (
+        <RunSummaryModal
+          sim={sim}
+          initialScope={runSummaryScope}
+          onClose={() => setRunSummaryOpen(false)}
+          onNextWave={!waveActive && !sim.allWavesCleared ? handleStartWave : undefined}
         />
       )}
     </div>

@@ -107,6 +107,8 @@ export interface PlacedTower {
   totalInvestedGold: number;
   totalKills: number;
   totalDamageDealt: number;
+  activeCombatSeconds?: number;
+  placedAtTime?: number;
   lockedTargetId?: string | null;
   beamRampTime?: number;
   flameAngle?: number;
@@ -228,6 +230,9 @@ export interface FloatingText {
   life: number;
   maxLife: number;
   isCrit?: boolean;
+  damageType?: DamageType;
+  isResisted?: boolean;
+  tag?: string; // 'FIRE' | 'COLD' | 'LIGHTNING' | 'MAGIC' | 'CRIT' | 'RESISTED' | 'SHATTER' | 'IGNITE' | 'EXECUTE'
 }
 
 export interface Particle {
@@ -352,4 +357,48 @@ export interface GameSaveState {
   soundMuted?: boolean;
   selectedSkin?: string;
   selectedTheme?: string;
+}
+
+export type ChallengeModifierId =
+  | 'DOUBLE_SPAWN'
+  | 'IRON_SKIN'
+  | 'BLOOD_PRICE'
+  | 'NO_MERCY'
+  | 'FROZEN_TIME';
+
+export interface ChallengeModifierDef {
+  id: ChallengeModifierId;
+  name: string;
+  description: string;
+  icon: string;
+  scoreMultiplier: number;
+  color: string;
+}
+
+export interface TowerPresetItem {
+  towerType: TowerType;
+  targetPathRanks: [number, number, number];
+  priority: TargetingPriority;
+  notes?: string;
+}
+
+export interface TowerPresetLoadout {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  towers: TowerPresetItem[];
+}
+
+export interface DailyTacticalChallengeDef {
+  dateKey: string;
+  title: string;
+  subtitle: string;
+  mapId: string;
+  waves: WaveDef[];
+  startingGold: number;
+  startingLives: number;
+  allowedTowers: TowerType[];
+  activeModifiers: ChallengeModifierId[];
+  targetWaves: number;
 }

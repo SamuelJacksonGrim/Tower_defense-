@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Star, Award, Coins, ArrowRight, RotateCcw } from 'lucide-react';
+import { Star, Award, Coins, ArrowRight, RotateCcw, BarChart2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { CampaignLevel } from '../types/game';
 
@@ -12,6 +12,7 @@ interface BattleVictoryModalProps {
   onNextLevel: () => void;
   onReplay: () => void;
   onReturnToMap: () => void;
+  onViewSummary?: () => void;
 }
 
 export const BattleVictoryModal: React.FC<BattleVictoryModalProps> = ({
@@ -22,7 +23,8 @@ export const BattleVictoryModal: React.FC<BattleVictoryModalProps> = ({
   goldEarned,
   onNextLevel,
   onReplay,
-  onReturnToMap
+  onReturnToMap,
+  onViewSummary
 }) => {
   // Star calculation
   const ratio = livesRemaining / maxLives;
@@ -103,6 +105,16 @@ export const BattleVictoryModal: React.FC<BattleVictoryModalProps> = ({
             <span>Next Sector</span>
             <ArrowRight size={16} />
           </button>
+
+          {onViewSummary && (
+            <button
+              onClick={onViewSummary}
+              className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 border border-sky-500/40 text-sky-300 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <BarChart2 size={14} className="text-sky-400" />
+              <span>View Run Summary</span>
+            </button>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <button

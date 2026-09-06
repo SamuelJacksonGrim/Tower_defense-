@@ -33,6 +33,7 @@ export interface WaveTelemetrySummary {
   leaks: number;
   goldEarned: number;
   goldSpent: number;
+  goldRefunded: number;
   towerDps: Record<string, number>;
   towerDamage: Record<string, number>;
   towerKills: Record<string, number>;
@@ -51,6 +52,7 @@ export class CombatTelemetry {
   public waveLeaks = 0;
   public waveGoldEarned = 0;
   public waveGoldSpent = 0;
+  public waveGoldRefunded = 0;
   public waveTowerDamage: Record<string, number> = {};
   public waveTowerKills: Record<string, number> = {};
 
@@ -60,6 +62,7 @@ export class CombatTelemetry {
   public runLeaks = 0;
   public runGoldEarned = 0;
   public runGoldSpent = 0;
+  public runGoldRefunded = 0;
   public runTowerDamage: Record<string, number> = {};
   public runTowerKills: Record<string, number> = {};
 
@@ -116,6 +119,8 @@ export class CombatTelemetry {
       }
       case 'TowerSold': {
         const refund = payload.amount || 0;
+        this.waveGoldRefunded += refund;
+        this.runGoldRefunded += refund;
         this.waveGoldEarned += refund;
         this.runGoldEarned += refund;
         break;
@@ -134,6 +139,7 @@ export class CombatTelemetry {
     this.waveLeaks = 0;
     this.waveGoldEarned = 0;
     this.waveGoldSpent = 0;
+    this.waveGoldRefunded = 0;
     this.waveTowerDamage = {};
     this.waveTowerKills = {};
 
@@ -159,6 +165,7 @@ export class CombatTelemetry {
       leaks: this.waveLeaks,
       goldEarned: this.waveGoldEarned,
       goldSpent: this.waveGoldSpent,
+      goldRefunded: this.waveGoldRefunded,
       towerDps,
       towerDamage: { ...this.waveTowerDamage },
       towerKills: { ...this.waveTowerKills }

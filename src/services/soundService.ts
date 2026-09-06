@@ -329,6 +329,29 @@ class SoundManager {
     }
   }
 
+  // Critical strike or execute burst
+  public playCritical() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(1760, now + 0.08);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.12);
+    } catch {
+      // safe ignore
+    }
+  }
+
   // Level Defeat drone
   public playDefeat() {
     if (this.isMuted) return;

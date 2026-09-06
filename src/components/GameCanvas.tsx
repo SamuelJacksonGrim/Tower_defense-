@@ -17,6 +17,8 @@ export interface GameCanvasProps {
   dragClientPos?: { clientX: number; clientY: number } | null;
   onDropTowerOnSlot?: (slotIndex: number, type: TowerType) => void;
   onCancelDrag?: () => void;
+  onSelectEnemyForAnalysis?: (enemy: any) => void;
+  analyzedEnemyId?: string | null;
 }
 
 const LOGICAL_WIDTH = 920;
@@ -34,7 +36,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   draggedTowerType = null,
   dragClientPos = null,
   onDropTowerOnSlot,
-  onCancelDrag
+  onCancelDrag,
+  onSelectEnemyForAnalysis,
+  analyzedEnemyId = null
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -227,7 +231,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       drawBeams(ctx, sim);
 
       // 7. Draw Enemies (Ground first, then Flyers with shadows)
-      drawEnemies(ctx, sim);
+      drawEnemies(ctx, sim, analyzedEnemyId);
 
       // 8. Draw Flying Projectiles
       drawProjectiles(ctx, sim);
@@ -253,13 +257,33 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     showGrid,
     activeDragType,
     activeDragCoords,
-    snappedSlotIndex
+    snappedSlotIndex,
+    analyzedEnemyId
   ]);
 
   /**
    * Generous hit-testing for both mouse clicks and mobile finger touches.
    */
   const handleSelectAtCoords = (x: number, y: number) => {
+    // 0. If a tower is selected, allow tapping an enemy for "Why didn't my tower kill that?" Target Analysis!
+    if (selectedTower) {
+      let bestEnemy: any = null;
+      let bestEnemyDistSq = 32 * 32;
+      for (const enemy of sim.enemies) {
+        if (!enemy.alive || enemy.leaked) continue;
+        const distSq = (enemy.x - x) ** 2 + (enemy.y - y) ** 2;
+        if (distSq < bestEnemyDistSq) {
+          bestEnemyDistSq = distSq;
+          bestEnemy = enemy;
+        }
+      }
+      if (bestEnemy) {
+        sound.playClick();
+        onSelectEnemyForAnalysis?.(bestEnemy);
+        return;
+      }
+    }
+
     // 1. Check if clicked/tapped an existing tower (radius 32px)
     let bestTower: PlacedTower | null = null;
     let bestTowerDistSq = 32 * 32;
@@ -275,6 +299,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       sound.playClick();
       onSelectTower(bestTower);
       onSelectEmptySlot?.(null);
+      onSelectEnemyForAnalysis?.(null);
       return;
     }
 
@@ -297,6 +322,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         sound.playClick();
         onSelectTower(existing);
         onSelectEmptySlot?.(null);
+        onSelectEnemyForAnalysis?.(null);
         return;
       }
 
@@ -310,12 +336,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         onSelectTower(null);
         onSelectEmptySlot?.(bestSlotIndex);
       }
+      onSelectEnemyForAnalysis?.(null);
       return;
     }
 
     // Clicked empty ground outside any slot or tower
     onSelectTower(null);
     onSelectEmptySlot?.(null);
+    onSelectEnemyForAnalysis?.(null);
   };
 
   const updateHoveredSlot = (x: number, y: number) => {
@@ -1185,7 +1213,7 @@ function drawBeams(ctx: CanvasRenderingContext2D, sim: SimWorld) {
   }
 }
 
-function drawEnemies(ctx: CanvasRenderingContext2D, sim: SimWorld) {
+function drawEnemies(ctx: CanvasRenderingContext2D, sim: SimWorld, analyzedEnemyId: string | null = null) {
   // Sort ground first, then flying so flying enemies render visibly overhead
   const sorted = [...sim.enemies].sort((a, b) => (a.isFlying ? 1 : 0) - (b.isFlying ? 1 : 0));
 
@@ -1271,35 +1299,101 @@ function drawEnemies(ctx: CanvasRenderingContext2D, sim: SimWorld) {
       ctx.stroke();
     }
 
+    // Marked reticle
+    if (enemy.status.markedTimer > 0) {
+      const reticleAngle = (Date.now() * 0.003) % (Math.PI * 2);
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, enemy.size + 5, reticleAngle, reticleAngle + Math.PI * 1.5);
+      ctx.stroke();
+    }
+
+    // Target Analyzed Brackets
+    if (analyzedEnemyId === enemy.id) {
+      const pulse = 1 + Math.sin(Date.now() * 0.008) * 0.15;
+      const bracketSize = (enemy.size + 8) * pulse;
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2;
+
+      ctx.beginPath();
+      ctx.moveTo(-bracketSize, -bracketSize + 6);
+      ctx.lineTo(-bracketSize, -bracketSize);
+      ctx.lineTo(-bracketSize + 6, -bracketSize);
+
+      ctx.moveTo(bracketSize - 6, -bracketSize);
+      ctx.lineTo(bracketSize, -bracketSize);
+      ctx.lineTo(bracketSize, -bracketSize + 6);
+
+      ctx.moveTo(bracketSize, bracketSize - 6);
+      ctx.lineTo(bracketSize, bracketSize);
+      ctx.lineTo(bracketSize - 6, bracketSize);
+
+      ctx.moveTo(-bracketSize + 6, bracketSize);
+      ctx.lineTo(-bracketSize, bracketSize);
+      ctx.lineTo(-bracketSize, bracketSize - 6);
+      ctx.stroke();
+
+      ctx.font = 'bold 8px Rajdhani, monospace';
+      ctx.fillStyle = '#38bdf8';
+      ctx.textAlign = 'center';
+      ctx.fillText('ANALYZING', 0, -bracketSize - 4);
+    }
+
     ctx.restore();
 
     // Overhead Health bar
-    const barWidth = enemy.isBoss ? 48 : 26;
-    const barHeight = enemy.isBoss ? 5 : 3;
-    const barY = enemy.y - enemy.size - (enemy.isBoss ? 15 : 10);
+    const barWidth = enemy.isBoss ? 48 : 28;
+    const barHeight = enemy.isBoss ? 5 : 3.5;
+    const barY = enemy.y - enemy.size - (enemy.isBoss ? 16 : 12);
     const hpRatio = Math.max(0, Math.min(1, enemy.hp / enemy.maxHp));
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
     ctx.fillRect(enemy.x - barWidth / 2, barY, barWidth, barHeight);
 
     ctx.fillStyle = hpRatio > 0.5 ? '#22c55e' : (hpRatio > 0.25 ? '#f59e0b' : '#ef4444');
     ctx.fillRect(enemy.x - barWidth / 2, barY, barWidth * hpRatio, barHeight);
 
+    // Tactical Armor Bar underneath HP
+    if (enemy.armor > 0) {
+      const armorBarY = barY + barHeight + 1.5;
+      const armorRatio = Math.min(1, enemy.armor / 45);
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(enemy.x - barWidth / 2, armorBarY, barWidth, 2);
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(enemy.x - barWidth / 2, armorBarY, barWidth * armorRatio, 2);
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = 'bold 8px Rajdhani, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`🛡${enemy.armor}`, enemy.x + barWidth / 2 + 3, barY + 4);
+    }
+
     // Status effect badges overhead
+    let badgeX = enemy.x - 14;
     if (enemy.status.slowTimer > 0) {
       ctx.fillStyle = '#38bdf8';
       ctx.font = '9px sans-serif';
-      ctx.fillText('❄', enemy.x - 12, barY - 4);
+      ctx.fillText('❄', badgeX, barY - 4);
+      badgeX += 10;
     }
     if (enemy.status.burnTimer > 0) {
       ctx.fillStyle = '#f97316';
       ctx.font = '9px sans-serif';
-      ctx.fillText('🔥', enemy.x + 4, barY - 4);
+      ctx.fillText('🔥', badgeX, barY - 4);
+      badgeX += 10;
     }
-    if (enemy.armor > 0) {
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = 'bold 8px Rajdhani';
-      ctx.fillText(`🛡${enemy.armor}`, enemy.x + 14, barY + 3);
+    if (enemy.status.poisonTimer > 0 || (enemy.status.poisonStacks && enemy.status.poisonStacks > 0)) {
+      ctx.fillStyle = '#a855f7';
+      ctx.font = '9px sans-serif';
+      ctx.fillText('🧪', badgeX, barY - 4);
+      badgeX += 10;
+    }
+    if (enemy.status.markedTimer > 0) {
+      ctx.fillStyle = '#facc15';
+      ctx.font = '9px sans-serif';
+      ctx.fillText('🎯', badgeX, barY - 4);
     }
   }
 }
@@ -1332,12 +1426,22 @@ function drawParticles(ctx: CanvasRenderingContext2D, sim: SimWorld) {
 
 function drawFloatingTexts(ctx: CanvasRenderingContext2D, sim: SimWorld) {
   for (const ft of sim.floatingTexts) {
-    const alpha = ft.life / ft.maxLife;
+    const alpha = Math.max(0, Math.min(1, ft.life / ft.maxLife));
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // Render Tactical Synergy or Resistance Tag
+    if (ft.tag) {
+      ctx.font = 'bold 8px Rajdhani, monospace';
+      ctx.fillStyle = ft.color;
+      ctx.textAlign = 'center';
+      ctx.fillText(ft.tag, ft.x, ft.y - 11);
+    }
+
     ctx.fillStyle = ft.color;
-    ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-    ctx.font = ft.isCrit ? 'bold 13px Rajdhani' : '11px Rajdhani';
+    ctx.font = ft.isCrit || ft.tag === 'EXECUTE' || ft.tag === 'SHATTER' ? 'bold 13px Rajdhani, monospace' : 'bold 11px Rajdhani, monospace';
     ctx.textAlign = 'center';
     ctx.fillText(ft.text, ft.x, ft.y);
-    ctx.globalAlpha = 1.0;
+    ctx.restore();
   }
 }

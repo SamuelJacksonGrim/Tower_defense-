@@ -878,6 +878,8 @@ MAPS_DATA.frontier_outpost = MAPS_DATA.map1;
 MAPS_DATA.ashen_caldera = MAPS_DATA.map2;
 MAPS_DATA.cold_hell_gate = MAPS_DATA.map3;
 
+export const MAPS = MAPS_DATA;
+
 // 20 Campaign Levels with Boss Encounters & Tower Discoveries
 export const CAMPAIGN_LEVELS: CampaignLevel[] = [
   {

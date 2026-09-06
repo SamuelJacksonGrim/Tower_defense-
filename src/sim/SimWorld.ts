@@ -9,7 +9,9 @@ import {
   WaveDef,
   WaveGroup,
   EnemyArchetype,
-  StatusBag
+  StatusBag,
+  ChallengeModifierId,
+  DamageType
 } from '../types/game';
 import { TOWERS_DATA, ENEMIES_DATA } from '../data/gameData';
 import { TDMath } from './TDMath';
@@ -47,6 +49,9 @@ export class SimWorld {
   public waveTime: number = 0;
   public waveActive: boolean = false;
   public allWavesCleared: boolean = false;
+
+  public challengeModifiers: ChallengeModifierId[] = [];
+  public totalWaveActiveTime: number = 0;
 
   // Spawning scratch
   private activeSpawners: {
@@ -101,12 +106,14 @@ export class SimWorld {
     startingGold: number,
     startingLives: number,
     techTree: Record<string, number> = {},
-    events: SimEvents = {}
+    events: SimEvents = {},
+    challengeModifiers: ChallengeModifierId[] = []
   ) {
     this.map = map;
     this.pathLength = TDMath.getPathLength(map.waypoints);
     this.waves = waves;
     this.events = events;
+    this.challengeModifiers = challengeModifiers;
 
     // Calculate tech tree modifiers
     const physTier = techTree['sharpened_heads'] || 0;
@@ -149,7 +156,10 @@ export class SimWorld {
     const def = TOWERS_DATA[type];
     if (!def) return false;
 
-    const finalCost = Math.round(def.baseCost * this.techModifiers.costDiscountMult);
+    let finalCost = Math.round(def.baseCost * this.techModifiers.costDiscountMult);
+    if (this.challengeModifiers.includes('BLOOD_PRICE')) {
+      finalCost = Math.round(finalCost * 1.25);
+    }
     return this.gold >= finalCost;
   }
 
@@ -158,7 +168,10 @@ export class SimWorld {
 
     const slot = this.map.slots[slotIndex];
     const def = TOWERS_DATA[type];
-    const finalCost = Math.round(def.baseCost * this.techModifiers.costDiscountMult);
+    let finalCost = Math.round(def.baseCost * this.techModifiers.costDiscountMult);
+    if (this.challengeModifiers.includes('BLOOD_PRICE')) {
+      finalCost = Math.round(finalCost * 1.25);
+    }
 
     this.gold -= finalCost;
     this.events.onGoldChanged?.(this.gold);
@@ -176,6 +189,8 @@ export class SimWorld {
       totalInvestedGold: finalCost,
       totalKills: 0,
       totalDamageDealt: 0,
+      activeCombatSeconds: 0,
+      placedAtTime: this.totalWaveActiveTime,
       aimAngle: 0
     };
 
@@ -204,7 +219,10 @@ export class SimWorld {
     const nextTierDef = def.paths[pathIndex].tiers[currentRank];
     if (!nextTierDef) return { allowed: false, reason: 'No tier def', cost: 0 };
 
-    const cost = Math.round(nextTierDef.cost * this.techModifiers.costDiscountMult);
+    let cost = Math.round(nextTierDef.cost * this.techModifiers.costDiscountMult);
+    if (this.challengeModifiers.includes('BLOOD_PRICE')) {
+      cost = Math.round(cost * 1.25);
+    }
 
     // Enforce 5/2/0 Path Lock from Shadow Codex
     // 1. If upgrading to Tier 3 or higher on this path:
@@ -391,6 +409,10 @@ export class SimWorld {
       damage *= this.techModifiers.magicDmgMult;
     }
 
+    if (this.challengeModifiers.includes('FROZEN_TIME')) {
+      fireRate *= 0.8;
+    }
+
     const interval = fireRate > 0 ? 1.0 / fireRate : 1.0;
 
     return {
@@ -455,6 +477,7 @@ export class SimWorld {
     // 1. Time & Wave Director
     if (this.waveActive) {
       this.waveTime += dt;
+      this.totalWaveActiveTime += dt;
       this.stepWaveDirector(dt);
     }
 
@@ -502,7 +525,10 @@ export class SimWorld {
       if (spawner.timer <= 0) {
         this.spawnEnemy(spawner.group.enemyType, spawner.group.hpMult, spawner.group.speedMult);
         spawner.spawnedCount++;
-        spawner.timer = spawner.group.interval;
+        const spawnInterval = this.challengeModifiers.includes('DOUBLE_SPAWN')
+          ? spawner.group.interval * 0.5
+          : spawner.group.interval;
+        spawner.timer = spawnInterval;
       }
     }
   }
@@ -512,6 +538,10 @@ export class SimWorld {
     const p0 = this.map.waypoints[0];
 
     const maxHp = Math.round(def.baseHp * hpMult);
+    let baseArmor = def.baseArmor;
+    if (this.challengeModifiers.includes('IRON_SKIN')) {
+      baseArmor = Math.round(baseArmor * 1.5);
+    }
 
     const enemy: EnemyInstance = {
       id: `enemy_${this.idCounter++}`,
@@ -523,7 +553,7 @@ export class SimWorld {
       hp: maxHp,
       maxHp,
       speed: def.baseSpeed * speedMult,
-      armor: def.baseArmor,
+      armor: baseArmor,
       reward: def.reward,
       isFlying: def.isFlying,
       isBoss: def.isBoss,
@@ -772,7 +802,7 @@ export class SimWorld {
         target.status.markedDamageBonus
       );
 
-      this.applyDamageToEnemy(target, res.finalDamage, res.isCrit, tower);
+      this.applyDamageToEnemy(target, res.finalDamage, res.isCrit, tower, 'lightning', bounceDmg);
 
       // Spark particles
       for (let p = 0; p < 4; p++) {
@@ -870,7 +900,7 @@ export class SimWorld {
           const splashDmg = Math.round(p.damage * Math.max(0.3, falloff));
 
           const res = TDMath.calculateDamage(splashDmg, p.damageType, e.armor, 0, false, 2.0, e.status.markedDamageBonus);
-          this.applyDamageToEnemy(e, res.finalDamage, false, tower);
+          this.applyDamageToEnemy(e, res.finalDamage, false, tower, p.damageType, splashDmg);
         }
       }
 
@@ -893,12 +923,20 @@ export class SimWorld {
     } else {
       // Single hit / pierce
       const res = TDMath.calculateDamage(p.damage, p.damageType, directTarget.armor, 0, false, 2.0, directTarget.status.markedDamageBonus);
-      this.applyDamageToEnemy(directTarget, res.finalDamage, false, tower);
+      this.applyDamageToEnemy(directTarget, res.finalDamage, false, tower, p.damageType, p.damage);
 
-      // Apply slow / bleed
+      // Apply slow / bleed / freeze / mark
       if (p.statusEffects?.slowTimer && p.statusEffects.slowTimer > 0) {
         directTarget.status.slowMultipliers.push(0.30);
         directTarget.status.slowTimer = Math.max(directTarget.status.slowTimer, p.statusEffects.slowTimer);
+      }
+      if (p.statusEffects?.freezeTimer && p.statusEffects.freezeTimer > 0) {
+        directTarget.status.freezeTimer = Math.max(directTarget.status.freezeTimer, p.statusEffects.freezeTimer);
+      }
+      if (p.statusEffects?.markedTimer && p.statusEffects.markedTimer > 0) {
+        directTarget.status.markedTimer = p.statusEffects.markedTimer;
+        directTarget.status.markedDamageBonus = p.statusEffects.markedDamageBonus || 0.35;
+        this.addFloatingText(directTarget.x, directTarget.y - 18, 'MARKED', '#38bdf8', false, 'physical', false, 'MARKED');
       }
       if (p.statusEffects?.bleedDps && p.statusEffects.bleedDps > 0) {
         directTarget.status.bleedDps = p.statusEffects.bleedDps;
@@ -942,7 +980,7 @@ export class SimWorld {
           const frameDamage = (currentDps * dt);
 
           const res = TDMath.calculateDamage(frameDamage, 'lightning', target.armor, stats.pierce, false, 2.0, target.status.markedDamageBonus);
-          this.applyDamageToEnemy(target, res.finalDamage, false, tower);
+          this.applyDamageToEnemy(target, res.finalDamage, false, tower, 'lightning', frameDamage);
 
           // Add visual beam
           this.laserBeams.push({
@@ -981,7 +1019,7 @@ export class SimWorld {
               if (angleDiff <= halfCone) {
                 const tickDmg = stats.damage * 5 * dt; // 5 ticks/s
                 const res = TDMath.calculateDamage(tickDmg, 'fire', enemy.armor, 0, false, 2.0, enemy.status.markedDamageBonus);
-                this.applyDamageToEnemy(enemy, res.finalDamage, false, tower);
+                this.applyDamageToEnemy(enemy, res.finalDamage, false, tower, 'fire', tickDmg);
 
                 // Apply burn DoT
                 enemy.status.burnTimer = 3.0;
@@ -1018,14 +1056,21 @@ export class SimWorld {
       if (e.status.burnTimer > 0) {
         e.status.burnTimer -= dt;
         const burnTick = e.status.burnDps * dt;
-        this.applyDamageToEnemy(e, Math.max(1, Math.round(burnTick)), false);
+        this.applyDamageToEnemy(e, Math.max(1, Math.round(burnTick)), false, undefined, 'fire');
       }
 
       // Bleed
       if (e.status.bleedTimer > 0) {
         e.status.bleedTimer -= dt;
         const bleedTick = e.status.bleedDps * dt;
-        this.applyDamageToEnemy(e, Math.max(1, Math.round(bleedTick)), false);
+        this.applyDamageToEnemy(e, Math.max(1, Math.round(bleedTick)), false, undefined, 'physical');
+      }
+
+      // Poison
+      if (e.status.poisonTimer > 0) {
+        e.status.poisonTimer -= dt;
+        const poisonTick = (e.status.poisonDps || 22) * dt;
+        this.applyDamageToEnemy(e, Math.max(1, Math.round(poisonTick)), false, undefined, 'magic');
       }
 
       // Void Leech regeneration
@@ -1059,14 +1104,84 @@ export class SimWorld {
     }
   }
 
-  public applyDamageToEnemy(enemy: EnemyInstance, amount: number, isCrit: boolean = false, sourceTower?: PlacedTower) {
+  public applyDamageToEnemy(
+    enemy: EnemyInstance,
+    amount: number,
+    isCrit: boolean = false,
+    sourceTower?: PlacedTower,
+    damageType: DamageType = 'physical',
+    rawDamageBeforeMitigation?: number
+  ) {
     if (!enemy.alive || enemy.leaked || amount <= 0) return;
 
-    enemy.hp -= amount;
-    this.stats.totalDamageDealt += amount;
+    let finalAmount = amount;
+    let tag: string | undefined = undefined;
+    let isResisted = false;
+
+    // Synergy 1: Mark -> Execute (Ballista/Obelisk/Heavy hits execute marked demons)
+    if (enemy.status.markedTimer > 0 && (sourceTower?.type === 'obelisk' || sourceTower?.type === 'ballista' || finalAmount >= 35)) {
+      const execBonus = Math.round(finalAmount * 0.5);
+      finalAmount += execBonus;
+      tag = 'EXECUTE';
+      sound.playCritical();
+      for (let k = 0; k < 6; k++) {
+        this.addParticle(enemy.x, enemy.y, (Math.random() - 0.5) * 80, (Math.random() - 0.5) * 80, '#facc15', 3.5, 0.4);
+      }
+    }
+
+    // Synergy 2: Freeze -> Shatter (Physical or heavy hits shatter frozen foes for massive AOE)
+    if (enemy.status.freezeTimer > 0 && (damageType === 'physical' || sourceTower?.type === 'cannon' || sourceTower?.type === 'mortar' || sourceTower?.type === 'ballista' || sourceTower?.type === 'gatling')) {
+      enemy.status.freezeTimer = 0;
+      const shatterBonus = Math.round(finalAmount * 0.6);
+      finalAmount += shatterBonus;
+      tag = 'SHATTER';
+      sound.playFrost();
+
+      // Cold shards AOE to adjacent foes
+      const splashDistSq = 55 * 55;
+      for (let i = 0; i < this.enemies.length; i++) {
+        const other = this.enemies[i];
+        if (other.id !== enemy.id && other.alive && !other.leaked) {
+          if (TDMath.distSq(enemy.x, enemy.y, other.x, other.y) <= splashDistSq) {
+            other.hp -= Math.round(finalAmount * 0.35);
+            for (let s = 0; s < 3; s++) {
+              this.addParticle(other.x, other.y, (Math.random() - 0.5) * 70, (Math.random() - 0.5) * 70, '#38bdf8', 2.5, 0.3);
+            }
+          }
+        }
+      }
+    }
+
+    // Synergy 3: Burn -> Ignite (Concentrated flame heat triggers ignition detonation)
+    if (damageType === 'fire' && enemy.status.burnTimer > 0 && Math.random() < 0.4) {
+      const igniteBonus = Math.round(16 + finalAmount * 0.35);
+      finalAmount += igniteBonus;
+      tag = 'IGNITE';
+      sound.playExplosion(0.1);
+      for (let f = 0; f < 6; f++) {
+        this.addParticle(enemy.x, enemy.y, (Math.random() - 0.5) * 90, (Math.random() - 0.5) * 90, '#f97316', 3.2, 0.35);
+      }
+    }
+
+    // Resisted feedback: raw damage mitigated by >= 35%
+    if (rawDamageBeforeMitigation && rawDamageBeforeMitigation - amount >= 12 && (rawDamageBeforeMitigation - amount) / rawDamageBeforeMitigation >= 0.35) {
+      isResisted = true;
+      if (!tag && !isCrit) {
+        tag = 'RESISTED';
+      }
+    }
+
+    if (isCrit && !tag) {
+      tag = 'CRIT';
+    } else if (!tag && damageType !== 'physical') {
+      tag = damageType.toUpperCase();
+    }
+
+    enemy.hp -= finalAmount;
+    this.stats.totalDamageDealt += finalAmount;
 
     if (sourceTower) {
-      sourceTower.totalDamageDealt += amount;
+      sourceTower.totalDamageDealt += finalAmount;
     }
 
     this.telemetry.logEvent('DamageDealt', {
@@ -1074,12 +1189,31 @@ export class SimWorld {
       towerId: sourceTower?.id,
       enemyType: enemy.type,
       enemyId: enemy.id,
-      amount
+      amount: finalAmount
     });
 
-    // Floating text for big hits or crits
-    if (amount >= 20 || isCrit || enemy.isBoss) {
-      this.addFloatingText(enemy.x, enemy.y - 12, `-${amount}`, isCrit ? '#f43f5e' : '#f8fafc', isCrit);
+    // Floating text color based on damage type and synergy tag
+    let textColor = '#f8fafc';
+    if (tag === 'CRIT' || isCrit) textColor = '#f43f5e';
+    else if (tag === 'EXECUTE') textColor = '#eab308';
+    else if (tag === 'SHATTER' || tag === 'COLD') textColor = '#38bdf8';
+    else if (tag === 'IGNITE' || tag === 'FIRE') textColor = '#f97316';
+    else if (tag === 'LIGHTNING') textColor = '#facc15';
+    else if (tag === 'MAGIC') textColor = '#c084fc';
+    else if (isResisted) textColor = '#94a3b8';
+
+    // Floating text for combat feedback
+    if (finalAmount >= 15 || isCrit || enemy.isBoss || tag) {
+      this.addFloatingText(
+        enemy.x + (Math.random() * 14 - 7),
+        enemy.y - 12,
+        `-${finalAmount}`,
+        textColor,
+        isCrit,
+        damageType,
+        isResisted,
+        tag
+      );
     }
 
     if (enemy.hp <= 0) {
@@ -1101,6 +1235,29 @@ export class SimWorld {
       enemyType: enemy.type,
       enemyId: enemy.id
     });
+
+    // Synergy 4: Poison -> Contaminate (Dying poisoned or leech enemies detonate toxic spore clouds)
+    if (enemy.status.poisonTimer > 0 || enemy.status.poisonStacks > 0 || enemy.type === 'leech') {
+      const contagionRadiusSq = 65 * 65;
+      let spreadCount = 0;
+      for (let i = 0; i < this.enemies.length; i++) {
+        const other = this.enemies[i];
+        if (other.id !== enemy.id && other.alive && !other.leaked) {
+          if (TDMath.distSq(enemy.x, enemy.y, other.x, other.y) <= contagionRadiusSq) {
+            other.status.poisonTimer = 4.5;
+            other.status.poisonDps = Math.max(22, other.status.poisonDps || 0);
+            other.status.poisonStacks = (other.status.poisonStacks || 0) + 1;
+            spreadCount++;
+            for (let c = 0; c < 3; c++) {
+              this.addParticle(other.x, other.y, (Math.random() - 0.5) * 60, (Math.random() - 0.5) * 60, '#a855f7', 2.5, 0.35);
+            }
+          }
+        }
+      }
+      if (spreadCount > 0) {
+        this.addFloatingText(enemy.x, enemy.y - 16, 'CONTAMINATED!', '#a855f7', false, 'magic', false, 'CONTAMINATE');
+      }
+    }
 
     // Reward kill gold with Reward Growth formula (1.12 rate from workbook)
     const waveRewardMult = Math.pow(1.12, Math.min(15, this.currentWaveIndex) * 0.4);
@@ -1166,7 +1323,10 @@ export class SimWorld {
           enemyId: enemy.id
         });
 
-        const leakCost = enemy.isBoss ? 5 : 1;
+        let leakCost = enemy.isBoss ? 5 : 1;
+        if (this.challengeModifiers.includes('NO_MERCY')) {
+          leakCost *= 2;
+        }
         this.lives = Math.max(0, this.lives - leakCost);
         this.stats.livesLost += leakCost;
 
@@ -1248,16 +1408,28 @@ export class SimWorld {
   }
 
   private ftIndex = 0;
-  public addFloatingText(x: number, y: number, text: string, color: string, isCrit: boolean = false) {
-    if (this.floatingTexts.length >= 40) {
-      const ft = this.floatingTexts[this.ftIndex % 40];
+  public addFloatingText(
+    x: number,
+    y: number,
+    text: string,
+    color: string,
+    isCrit: boolean = false,
+    damageType?: DamageType,
+    isResisted?: boolean,
+    tag?: string
+  ) {
+    if (this.floatingTexts.length >= 60) {
+      const ft = this.floatingTexts[this.ftIndex % 60];
       ft.x = x;
       ft.y = y;
       ft.text = text;
       ft.color = color;
-      ft.life = 0.8;
-      ft.maxLife = 0.8;
+      ft.life = 0.85;
+      ft.maxLife = 0.85;
       ft.isCrit = isCrit;
+      ft.damageType = damageType;
+      ft.isResisted = isResisted;
+      ft.tag = tag;
       this.ftIndex++;
       return;
     }
@@ -1267,9 +1439,12 @@ export class SimWorld {
       y,
       text,
       color,
-      life: 0.8,
-      maxLife: 0.8,
-      isCrit
+      life: 0.85,
+      maxLife: 0.85,
+      isCrit,
+      damageType,
+      isResisted,
+      tag
     });
   }
 

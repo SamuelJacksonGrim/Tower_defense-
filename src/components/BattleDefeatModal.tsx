@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Skull, RotateCcw, Map, Film, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Skull, RotateCcw, Map, Film, CheckCircle2, ShieldAlert, BarChart2 } from 'lucide-react';
 import { CampaignLevel } from '../types/game';
 
 interface BattleDefeatModalProps {
@@ -7,13 +7,15 @@ interface BattleDefeatModalProps {
   demonsSlain: number;
   onRetry: (bonusGold?: number) => void;
   onReturnToMap: () => void;
+  onViewSummary?: () => void;
 }
 
 export const BattleDefeatModal: React.FC<BattleDefeatModalProps> = ({
   level,
   demonsSlain,
   onRetry,
-  onReturnToMap
+  onReturnToMap,
+  onViewSummary
 }) => {
   const [watchingAd, setWatchingAd] = useState(false);
   const [adGranted, setAdGranted] = useState(false);
@@ -92,6 +94,16 @@ export const BattleDefeatModal: React.FC<BattleDefeatModalProps> = ({
             <RotateCcw size={16} />
             <span>Retry Sector {adGranted ? 'with +200g' : ''}</span>
           </button>
+
+          {onViewSummary && (
+            <button
+              onClick={onViewSummary}
+              className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <BarChart2 size={14} className="text-sky-400" />
+              <span>View Combat Run Summary</span>
+            </button>
+          )}
 
           <button
             onClick={onReturnToMap}

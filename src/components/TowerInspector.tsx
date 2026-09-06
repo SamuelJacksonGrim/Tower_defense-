@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { PlacedTower, TargetingPriority } from '../types/game';
+import { PlacedTower, TargetingPriority, EnemyInstance } from '../types/game';
 import { TOWERS_DATA } from '../data/gameData';
 import { SimWorld } from '../sim/SimWorld';
+import { TDMath } from '../sim/TDMath';
 import {
   X,
   ShieldAlert,
@@ -12,7 +13,11 @@ import {
   ArrowRight,
   CheckCircle2,
   TrendingUp,
-  Info
+  Info,
+  Activity,
+  Target,
+  Zap,
+  AlertTriangle
 } from 'lucide-react';
 
 interface TowerInspectorProps {
@@ -22,6 +27,8 @@ interface TowerInspectorProps {
   onUpgrade: (pathIndex: 0 | 1 | 2) => void;
   onSell: () => void;
   onPriorityChange: (priority: TargetingPriority) => void;
+  analyzedEnemy?: EnemyInstance | null;
+  onClearAnalyzedEnemy?: () => void;
 }
 
 interface PriorityOption {
@@ -44,13 +51,63 @@ export const TowerInspector: React.FC<TowerInspectorProps> = ({
   onClose,
   onUpgrade,
   onSell,
-  onPriorityChange
+  onPriorityChange,
+  analyzedEnemy = null,
+  onClearAnalyzedEnemy
 }) => {
   const [hoveredPathIndex, setHoveredPathIndex] = useState<0 | 1 | 2 | null>(null);
 
   const def = TOWERS_DATA[tower.type];
   const stats = sim.getEffectiveTowerStats(tower);
   const refundGold = Math.round(tower.totalInvestedGold * 0.75);
+
+  // DPS in Practice calculations
+  const towerActiveSeconds = Math.max(1, (sim.totalWaveActiveTime || 0) - (tower.placedAtTime || 0));
+  const actualDps = Math.round(tower.totalDamageDealt / towerActiveSeconds);
+  const theoreticalDps = stats.dps;
+  const rawUptime = tower.activeCombatSeconds && towerActiveSeconds > 0
+    ? Math.round((tower.activeCombatSeconds / towerActiveSeconds) * 100)
+    : (theoreticalDps > 0 ? Math.min(100, Math.round((actualDps / theoreticalDps) * 100)) : 0);
+  const uptime = Math.min(100, Math.max(0, rawUptime));
+
+  // Target Analysis calculations
+  let enemyAnalysis = null;
+  if (analyzedEnemy && analyzedEnemy.alive && !analyzedEnemy.leaked) {
+    const dist = Math.round(Math.hypot(analyzedEnemy.x - tower.x, analyzedEnemy.y - tower.y));
+    const inRange = dist <= stats.range;
+    const calc = TDMath.calculateDamage(stats.damage, def.damageType, analyzedEnemy.armor, stats.pierce, false, stats.critMult, analyzedEnemy.status.markedDamageBonus);
+    const effectiveDamage = calc.finalDamage;
+    const mitigation = stats.damage > 0 ? Math.max(0, Math.round(((stats.damage - effectiveDamage) / stats.damage) * 100)) : 0;
+    const effectiveDps = Math.max(1, Math.round(effectiveDamage * stats.fireRate));
+    const ttk = (analyzedEnemy.hp / effectiveDps).toFixed(1);
+
+    let advice = 'Target within active killzone.';
+    if (!inRange) {
+      advice = `Out of range (${dist}px vs ${Math.round(stats.range)}px max). Upgrade Range or reposition.`;
+    } else if (mitigation >= 35) {
+      advice = `High Armor (${analyzedEnemy.armor}) absorbs ${mitigation}% of ${def.damageType} damage. Recommend Armor Shredding or Lightning/Magic!`;
+    } else if (analyzedEnemy.isFlying && !def.canTargetAir) {
+      advice = 'Invalid Target: Flying demon is immune to ground artillery!';
+    } else if (analyzedEnemy.status.freezeTimer > 0 && def.damageType === 'physical') {
+      advice = '⚡ Shatter Ready: Physical impact triggers +60% bonus shatter burst!';
+    } else if (analyzedEnemy.status.markedTimer > 0) {
+      advice = '🎯 Marked Target: Takes +35% amplified damage and Execute bonus.';
+    }
+
+    enemyAnalysis = {
+      name: analyzedEnemy.type.toUpperCase(),
+      hp: Math.max(0, Math.round(analyzedEnemy.hp)),
+      maxHp: analyzedEnemy.maxHp,
+      armor: analyzedEnemy.armor,
+      dist,
+      inRange,
+      effectiveDamage,
+      mitigation,
+      effectiveDps,
+      ttk,
+      advice
+    };
+  }
 
   // Check 5/2/0 Lock status
   const primaryPathIndex = tower.pathRanks.findIndex(r => r >= 3);
@@ -104,7 +161,7 @@ export const TowerInspector: React.FC<TowerInspectorProps> = ({
       </div>
 
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 pt-3 custom-scrollbar text-xs">
+      <div className="flex-1 overflow-y-auto space-y-3 pr-1 pt-3 custom-scrollbar text-xs">
         {/* Core Stats Overview */}
         <div className="grid grid-cols-4 gap-2 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80 text-center">
           <div>
@@ -123,6 +180,101 @@ export const TowerInspector: React.FC<TowerInspectorProps> = ({
             <div className="text-[10px] text-slate-400 uppercase">DPS</div>
             <div className="font-bold text-sm text-purple-400 font-mono">{stats.dps}</div>
           </div>
+        </div>
+
+        {/* 2. Tower DPS in Practice & Combat Efficiency */}
+        <div className="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800/80">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-slate-300 flex items-center gap-1.5 font-semibold text-[11px]">
+              <Activity size={13} className="text-emerald-400" /> DPS in Practice
+            </span>
+            <span className="text-[10px] text-slate-400 font-mono">
+              Uptime: <strong className={uptime >= 70 ? 'text-emerald-400' : 'text-amber-400'}>{uptime}%</strong>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-[11px] font-mono mb-2">
+            <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
+              <div className="text-[9px] text-slate-400 font-sans uppercase">Theoretical DPS</div>
+              <div className="text-sm font-bold text-slate-200">{theoreticalDps}</div>
+            </div>
+            <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
+              <div className="text-[9px] text-slate-400 font-sans uppercase">Actual DPS</div>
+              <div className={`text-sm font-bold ${actualDps >= theoreticalDps * 0.7 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {actualDps}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-[10px] text-slate-400 px-1 font-mono border-t border-slate-800/60 pt-1.5">
+            <span>Damage: <strong className="text-slate-200">{tower.totalDamageDealt.toLocaleString()}</strong></span>
+            <span>Kills: <strong className="text-emerald-400">{tower.totalKills}</strong></span>
+          </div>
+        </div>
+
+        {/* 3. "Why didn't my tower kill that?" Target Analysis */}
+        <div className="bg-slate-900/40 p-2.5 rounded-xl border border-slate-800/80">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-slate-300 flex items-center gap-1.5 font-semibold text-[11px]">
+              <Target size={13} className="text-sky-400" /> Target Analysis
+            </span>
+            {enemyAnalysis && (
+              <button
+                onClick={onClearAnalyzedEnemy}
+                className="text-[9px] text-slate-400 hover:text-slate-200 underline cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {enemyAnalysis ? (
+            <div className="bg-slate-950/70 p-2.5 rounded-lg border border-sky-500/30 space-y-2">
+              <div className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-sky-300">{enemyAnalysis.name}</span>
+                  <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded ${enemyAnalysis.inRange ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'}`}>
+                    {enemyAnalysis.inRange ? 'IN RANGE' : 'OUT OF RANGE'}
+                  </span>
+                </div>
+                <span className="font-mono text-slate-300 text-[10px]">
+                  {enemyAnalysis.hp} / {enemyAnalysis.maxHp} HP
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5 text-center font-mono text-[10px]">
+                <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
+                  <div className="text-[8px] text-slate-400 uppercase">Armor</div>
+                  <div className="font-bold text-slate-200">🛡 {enemyAnalysis.armor}</div>
+                </div>
+                <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
+                  <div className="text-[8px] text-slate-400 uppercase">Per-Hit</div>
+                  <div className="font-bold text-emerald-400">{enemyAnalysis.effectiveDamage} dmg</div>
+                </div>
+                <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
+                  <div className="text-[8px] text-slate-400 uppercase">Est. TTK</div>
+                  <div className="font-bold text-amber-400">{enemyAnalysis.ttk}s</div>
+                </div>
+              </div>
+
+              {enemyAnalysis.mitigation > 0 && (
+                <div className="text-[10px] text-slate-400 flex items-center justify-between">
+                  <span>Armor Mitigation:</span>
+                  <span className="text-amber-400 font-mono font-bold">-{enemyAnalysis.mitigation}% reduction</span>
+                </div>
+              )}
+
+              <div className="text-[10px] text-sky-200 bg-sky-950/40 p-1.5 rounded border border-sky-800/40 flex items-start gap-1">
+                <Info size={12} className="shrink-0 text-sky-400 mt-0.5" />
+                <span>{enemyAnalysis.advice}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="text-[10px] text-slate-400 bg-slate-950/40 p-2 rounded-lg border border-slate-800/50 flex items-center gap-2">
+              <Crosshair size={14} className="text-slate-500 shrink-0" />
+              <span>Tap any demon on the battlefield while this tower is selected to inspect hit damage, armor reduction, and Time-To-Kill.</span>
+            </div>
+          )}
         </div>
 
         {/* 1. Tower Targeting Controls */}
